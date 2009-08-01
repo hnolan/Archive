@@ -1,0 +1,237 @@
+-- MySQL dump 10.11
+--
+-- Host: localhost    Database: cdb_utils
+-- ------------------------------------------------------
+-- Server version	5.0.77-community-nt
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Dumping routines for database 'cdb_utils'
+--
+DELIMITER ;;
+/*!50003 DROP PROCEDURE IF EXISTS `dump_code` */;;
+/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `dump_code`()
+BEGIN
+
+declare pn varchar(50) default 'dump_code';
+declare rc int default 0;
+
+-- Declare variables and cursors
+declare done int default 0;
+
+-- declare dumpdir varchar(250);
+declare dumpdat varchar(20);
+declare dumpdb varchar(50);
+declare dumpdir varchar(50);
+declare dumpfil varchar(250);
+declare dumpfil2 varchar(250);
+declare procname varchar(50);
+declare viewname varchar(50);
+
+declare proccur cursor for select db, name from mysql.proc;
+-- declare viewcur cursor for select TABLE_NAME from information_schema.VIEWS where TABLE_SCHEMA = dumpdb;
+declare continue handler for not found set done = 1;
+declare continue handler for 1086 set done = 1;        -- Dumpfile already exists
+
+set dumpdir = 'E:/Dev/MySQL/Procs';
+set dumpdat = date_format(now(),'%Y%m%d.%H%i');
+
+open proccur;
+
+fetch next from proccur into dumpdb, procname;
+
+repeat
+
+  set dumpfil = concat( dumpdir, '/', dumpdb, '.', procname, '.code.sql' );
+  set @sql = 'select body from mysql.proc ';
+  set @sql = concat( @sql, ' where db = ''', dumpdb, ''' and name = ''', procname, ''' ' );
+  set @sql = concat( @sql, '  into dumpfile ''', dumpfil, ''' ' );
+  prepare ct from @sql;
+  execute ct;
+
+  set dumpfil2 = concat( dumpdir, '/', dumpdb, '.', procname, '.param.sql' );
+  set @sql = 'select param_list from mysql.proc ';
+  set @sql = concat( @sql, ' where db = ''', dumpdb, ''' and name = ''', procname, ''' ' );
+  set @sql = concat( @sql, '  into dumpfile ''', dumpfil2, ''' ' );
+  prepare ct from @sql;
+  execute ct;
+
+  fetch next from proccur into dumpdb, procname;
+
+ until done end repeat;
+
+ close proccur;
+
+ /*
+set done=0;
+open viewcur;
+
+fetch next from viewcur into viewname;
+
+repeat
+
+  set dumpfil = concat( dumpdir, '/V.', viewname, '.', date_format(now(),'%Y%m%d.%H%i'), '.txt' );
+
+  set @sql = 'SELECT VIEW_DEFINITION FROM information_schema.VIEWS ';
+  set @sql = concat( @sql, ' where TABLE_SCHEMA = ''', dumpdb, ''' and TABLE_NAME = ''', viewname, ''' ' );
+  set @sql = concat( @sql, '  into dumpfile ''', dumpfil, ''' ' );
+
+  prepare ct from @sql;
+  execute ct;
+
+  fetch next from viewcur into viewname;
+ until done end repeat;
+
+ close viewcur;
+*/
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `dump_code2` */;;
+/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `dump_code2`(
+        dumpdb varchar(45)
+        )
+BEGIN
+
+declare pn varchar(50) default 'xpv';
+declare rc int default 0;
+
+-- Declare variables and cursors
+declare done int default 0;
+
+declare dumpdir varchar(250);
+declare dumpfil varchar(250);
+declare procname varchar(50);
+declare viewname varchar(50);
+
+declare proccur cursor for select ROUTINE_NAME from information_schema.ROUTINES where ROUTINE_SCHEMA = dumpdb;
+declare viewcur cursor for select TABLE_NAME from information_schema.VIEWS where TABLE_SCHEMA = dumpdb;
+declare continue handler for not found set done = 1;
+
+set dumpdir = concat('d:/projects/cdb/', dumpdb, '/dumps');
+open proccur;
+
+fetch next from proccur into procname;
+
+repeat
+
+  set dumpfil = concat( dumpdir, '/P.', procname, '.', date_format(now(),'%Y%m%d.%H%i'), '.txt' );
+
+  set @sql = 'SELECT ROUTINE_DEFINITION FROM information_schema.ROUTINES ';
+  set @sql = concat( @sql, ' where ROUTINE_SCHEMA = ''', dumpdb, ''' and ROUTINE_NAME = ''', procname, ''' ' );
+  set @sql = concat( @sql, '  into dumpfile ''', dumpfil, ''' ' );
+
+  prepare ct from @sql;
+  execute ct;
+
+  fetch next from proccur into procname;
+ until done end repeat;
+
+ close proccur;
+
+set done=0;
+open viewcur;
+
+fetch next from viewcur into viewname;
+
+repeat
+
+  set dumpfil = concat( dumpdir, '/V.', viewname, '.', date_format(now(),'%Y%m%d.%H%i'), '.txt' );
+
+  set @sql = 'SELECT VIEW_DEFINITION FROM information_schema.VIEWS ';
+  set @sql = concat( @sql, ' where TABLE_SCHEMA = ''', dumpdb, ''' and TABLE_NAME = ''', viewname, ''' ' );
+  set @sql = concat( @sql, '  into dumpfile ''', dumpfil, ''' ' );
+
+  prepare ct from @sql;
+  execute ct;
+
+  fetch next from viewcur into viewname;
+ until done end repeat;
+
+ close viewcur;
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `ls` */;;
+/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `ls`()
+BEGIN
+  select * from rtg_cdb.cdb_log order by id limit 100;
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `lsr` */;;
+/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `lsr`()
+BEGIN
+  select * from cdc_rtg.cdc_log order by id desc limit 100;
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `weeknos` */;;
+/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `weeknos`(
+        d datetime, m int
+        )
+BEGIN
+
+declare i integer default 0;
+declare dt datetime;
+
+create temporary table t1 (
+dateval datetime,
+dayno   int(10),
+weekno  int(10)
+);
+
+truncate table t1;
+
+set dt = d;
+
+while i < 14 do
+  insert into t1 values ( dt, dayofweek(dt), week(dt,m) );
+  set dt = date_add( dt, interval 1 day );
+  set i = i + 1;
+ end while;
+
+select * from t1;
+
+drop temporary table t1;
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `xx` */;;
+/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `xx`()
+BEGIN
+
+truncate table rtg_cdb.cdb_export_data;
+truncate table rtg_cdb.cdb_hourly_data;
+truncate table rtg_cdb.cdb_datasets;
+truncate table rtg_cdb.cdb_interfaces;
+truncate table rtg_cdb.rtg_data_stats;
+truncate table rtg_cdb.cdb_log;
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+DELIMITER ;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2009-08-01 18:22:08
