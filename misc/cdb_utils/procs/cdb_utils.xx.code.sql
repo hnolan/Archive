@@ -1,10 +1,10 @@
 BEGIN
 
-truncate table rtg_cdb.cdb_export_data;
-truncate table rtg_cdb.cdb_hourly_data;
-truncate table rtg_cdb.cdb_datasets;
-truncate table rtg_cdb.cdb_interfaces;
-truncate table rtg_cdb.rtg_data_stats;
-truncate table rtg_cdb.cdb_log;
+truncate table cdc_rtg.cdc_export_data;
+truncate table cdc_rtg.cdc_hourly_data;
+truncate table cdc_rtg.cdc_datasets;
+truncate table cdc_rtg.cdc_interfaces;
+truncate table cdc_rtg.rtg_data_stats;
+truncate table cdc_rtg.cdc_log;
 
 END

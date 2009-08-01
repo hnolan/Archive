@@ -16,7 +16,6 @@ declare procname varchar(50);
 declare viewname varchar(50);
 
 declare proccur cursor for select db, name from mysql.proc;
--- declare viewcur cursor for select TABLE_NAME from information_schema.VIEWS where TABLE_SCHEMA = dumpdb;
 declare continue handler for not found set done = 1;
 declare continue handler for 1086 set done = 1;        -- Dumpfile already exists
 
@@ -48,27 +47,5 @@ repeat
  until done end repeat;
 
  close proccur;
-
- /*
-set done=0;
-open viewcur;
-
-fetch next from viewcur into viewname;
-
-repeat
-
-  set dumpfil = concat( dumpdir, '/V.', viewname, '.', date_format(now(),'%Y%m%d.%H%i'), '.txt' );
-
-  set @sql = 'SELECT VIEW_DEFINITION FROM information_schema.VIEWS ';
-  set @sql = concat( @sql, ' where TABLE_SCHEMA = ''', dumpdb, ''' and TABLE_NAME = ''', viewname, ''' ' );
-  set @sql = concat( @sql, '  into dumpfile ''', dumpfil, ''' ' );
-
-  prepare ct from @sql;
-  execute ct;
-
-  fetch next from viewcur into viewname;
- until done end repeat;
-
- close viewcur;
-*/
+ 
 END
