@@ -40,7 +40,6 @@ declare procname varchar(50);
 declare viewname varchar(50);
 
 declare proccur cursor for select db, name from mysql.proc;
--- declare viewcur cursor for select TABLE_NAME from information_schema.VIEWS where TABLE_SCHEMA = dumpdb;
 declare continue handler for not found set done = 1;
 declare continue handler for 1086 set done = 1;        -- Dumpfile already exists
 
@@ -72,102 +71,14 @@ repeat
  until done end repeat;
 
  close proccur;
-
- /*
-set done=0;
-open viewcur;
-
-fetch next from viewcur into viewname;
-
-repeat
-
-  set dumpfil = concat( dumpdir, '/V.', viewname, '.', date_format(now(),'%Y%m%d.%H%i'), '.txt' );
-
-  set @sql = 'SELECT VIEW_DEFINITION FROM information_schema.VIEWS ';
-  set @sql = concat( @sql, ' where TABLE_SCHEMA = ''', dumpdb, ''' and TABLE_NAME = ''', viewname, ''' ' );
-  set @sql = concat( @sql, '  into dumpfile ''', dumpfil, ''' ' );
-
-  prepare ct from @sql;
-  execute ct;
-
-  fetch next from viewcur into viewname;
- until done end repeat;
-
- close viewcur;
-*/
-END */;;
-/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
-/*!50003 DROP PROCEDURE IF EXISTS `dump_code2` */;;
-/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `dump_code2`(
-        dumpdb varchar(45)
-        )
-BEGIN
-
-declare pn varchar(50) default 'xpv';
-declare rc int default 0;
-
--- Declare variables and cursors
-declare done int default 0;
-
-declare dumpdir varchar(250);
-declare dumpfil varchar(250);
-declare procname varchar(50);
-declare viewname varchar(50);
-
-declare proccur cursor for select ROUTINE_NAME from information_schema.ROUTINES where ROUTINE_SCHEMA = dumpdb;
-declare viewcur cursor for select TABLE_NAME from information_schema.VIEWS where TABLE_SCHEMA = dumpdb;
-declare continue handler for not found set done = 1;
-
-set dumpdir = concat('d:/projects/cdb/', dumpdb, '/dumps');
-open proccur;
-
-fetch next from proccur into procname;
-
-repeat
-
-  set dumpfil = concat( dumpdir, '/P.', procname, '.', date_format(now(),'%Y%m%d.%H%i'), '.txt' );
-
-  set @sql = 'SELECT ROUTINE_DEFINITION FROM information_schema.ROUTINES ';
-  set @sql = concat( @sql, ' where ROUTINE_SCHEMA = ''', dumpdb, ''' and ROUTINE_NAME = ''', procname, ''' ' );
-  set @sql = concat( @sql, '  into dumpfile ''', dumpfil, ''' ' );
-
-  prepare ct from @sql;
-  execute ct;
-
-  fetch next from proccur into procname;
- until done end repeat;
-
- close proccur;
-
-set done=0;
-open viewcur;
-
-fetch next from viewcur into viewname;
-
-repeat
-
-  set dumpfil = concat( dumpdir, '/V.', viewname, '.', date_format(now(),'%Y%m%d.%H%i'), '.txt' );
-
-  set @sql = 'SELECT VIEW_DEFINITION FROM information_schema.VIEWS ';
-  set @sql = concat( @sql, ' where TABLE_SCHEMA = ''', dumpdb, ''' and TABLE_NAME = ''', viewname, ''' ' );
-  set @sql = concat( @sql, '  into dumpfile ''', dumpfil, ''' ' );
-
-  prepare ct from @sql;
-  execute ct;
-
-  fetch next from viewcur into viewname;
- until done end repeat;
-
- close viewcur;
-
+ 
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `ls` */;;
 /*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
 /*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `ls`()
 BEGIN
-  select * from rtg_cdb.cdb_log order by id limit 100;
+  select * from cdc_rtg.cdc_log order by id limit 100;
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `lsr` */;;
@@ -214,12 +125,12 @@ END */;;
 /*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `xx`()
 BEGIN
 
-truncate table rtg_cdb.cdb_export_data;
-truncate table rtg_cdb.cdb_hourly_data;
-truncate table rtg_cdb.cdb_datasets;
-truncate table rtg_cdb.cdb_interfaces;
-truncate table rtg_cdb.rtg_data_stats;
-truncate table rtg_cdb.cdb_log;
+truncate table cdc_rtg.cdc_export_data;
+truncate table cdc_rtg.cdc_hourly_data;
+truncate table cdc_rtg.cdc_datasets;
+truncate table cdc_rtg.cdc_interfaces;
+truncate table cdc_rtg.rtg_data_stats;
+truncate table cdc_rtg.cdc_log;
 
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
@@ -234,4 +145,4 @@ DELIMITER ;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-08-01 18:22:08
+-- Dump completed on 2009-08-01 18:54:59
