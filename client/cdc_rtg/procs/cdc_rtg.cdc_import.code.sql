@@ -1,16 +1,15 @@
 BEGIN
 
-/*
 
-This procedure produces hourly summaries from data in rtg data tables.
-
-It assumes that the polling interval is the default of 5 mins (300 secs).
-
-The main query uses mappings in the cdb_counters table to convert the
-raw data to use more sustainable units (e.g. KBytes rather than bytes,
-or KPkts rather than packets).
-
-*/
+-- ----------------------------------------------------------------------
+-- This procedure produces hourly summaries from data in rtg data tables.
+--
+-- It assumes that the polling interval is the default of 5 mins (300 secs).
+--
+-- The main query uses mappings in the cdb_counters table to convert the
+-- raw data to use more sustainable units (e.g. KBytes rather than bytes,
+-- or KPkts rather than packets).
+-- ----------------------------------------------------------------------
 
 -- Declare variables and cursors
 declare pn varchar(50) default 'cdc_import';
@@ -18,6 +17,9 @@ declare rc integer default 0;
 declare tc integer default 0;
 declare rctot integer default 0;
 declare rcout integer default 0;
+
+declare sd datetime;
+declare ed datetime;
 
 declare done int default 0;
 declare tabnam varchar(50);
@@ -29,16 +31,30 @@ declare dur integer default 300;
 declare tabcur cursor for SELECT distinct rtg_data_table FROM cdc_datasets;
 declare continue handler for not found set done = 1;
 
-call cdc_logit( pn, concat( 'Enter (',bdt,')' ) );
+-- Derive a start date (sd) and end date (ed) from the parameters passed in.
+-- This allows the raw data selection query to limit the source table to a
+-- specific date range and so makes the query much more efficient when the
+-- source tables are large. (They only have an index dtime not on id)
 
-/*
-----------------------------------------------
- Prepare for import
- Create tempdata table and set the import_from
- field for each dataset to be one hour later than
- the latest sample in the hourly data table.
-----------------------------------------------
-*/
+if import_upto = '' then
+  set ed = now();
+ else
+  set ed = cast(import_upto as datetime);
+ end if;
+
+if days_before <= 0 then
+  set sd = date_sub( ed, interval 14 day );
+ else
+  set sd = date_sub( ed, interval days_before day );
+ end if;
+
+call cdc_logit( pn, concat( 'Enter (',import_upto,', ',days_before,') [ From ', sd, ' to ', ed, ' ]' ) );
+
+-- ----------------------------------------------------------------------
+--  Prepare for import
+--  Create tempdata table and set the import_from field for each dataset
+-- to be one hour later than the latest sample in the hourly data table.
+-- ----------------------------------------------------------------------
 
 -- Update hourly stats
 update cdc_datasets ds
@@ -52,12 +68,11 @@ create temporary table tempdata (
  dval float not null
  );
 
-/*
-----------------------------------------------
- Collect raw data from multiple rtg tables
- into a single tempdata table
-----------------------------------------------
-*/
+-- ----------------------------------------------
+--  Collect raw data from multiple rtg tables
+--  into a single tempdata table
+-- ----------------------------------------------
+
 open tabcur;
 
 -- Get first row from cursor
@@ -70,19 +85,8 @@ repeat
   set @sql = 'insert into tempdata ( dsid, dtime, dval ) ';
   set @sql = CONCAT( @sql, ' select ds.id as dsid, d.dtime, d.counter from rtg.', tabnam, ' d ' );
   set @sql = CONCAT( @sql, ' join cdc_interfaces ci on d.id = ci.rtg_iid join cdc_datasets ds on ci.id = ds.cdc_iid ' );
-  set @sql = CONCAT( @sql, ' where ds.rtg_data_table = ''', tabnam, ''' and dtime >= ds.import_from' );
-
-  -- Add endpoint condition, if supplied
-  if bdt = '' then
-    -- Empty param, so no condition
-    set @sql = CONCAT( @sql, ';' );
-   elseif length(bdt) < 3 then
-    -- Short param, assume its a number of days
-    set @sql = CONCAT( @sql, ' and dtime <= date_add( ds.import_from, interval ', bdt, ' day );' );
-   else
-    -- Longer param, assume its an explicit date
-    set @sql = CONCAT( @sql, ' and dtime <= ''', bdt, ''';' );
-   end if;
+  set @sql = CONCAT( @sql, ' where dtime between ''', sd, ''' and ''', ed, ''' ' );  -- Limit source to date range
+  set @sql = CONCAT( @sql, '  and ds.rtg_data_table = ''', tabnam, ''' and dtime >= ds.import_from' );
 
   prepare uht from @sql;
   execute uht;
@@ -97,20 +101,16 @@ select count(*) from tempdata into rc;
 
 call cdc_logit( pn, concat( 'Selected ', rc ,' raw data rows from ', tc ,' tables' ) );
 
-/*
-----------------------------------------------
- Process the temp table of raw data
-----------------------------------------------
-*/
+-- --------------------------------------------
+--  Process the temp table of raw data
+-- --------------------------------------------
 
 -- Add an index to speed up processing
 alter table tempdata add index idx1 (dsid);
 
-/*
-To prevent the query from summarising the final (potentially incomplete) hour, we
-find the latest timestamp for each raw dataset, round it down to a whole hour and
-only process data less than (prior to) this high water mark.
-*/
+-- To prevent the query from summarising the final (potentially incomplete) hour, we
+-- find the latest timestamp for each raw dataset, round it down to a whole hour and
+-- only process data less than (prior to) this high water mark.
 
 -- Update cdb_datasets with raw data high water marks
 update cdc_datasets ds join (

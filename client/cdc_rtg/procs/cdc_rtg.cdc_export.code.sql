@@ -2,29 +2,48 @@ BEGIN
 
 -- Declare variables and cursors
 declare pn varchar(50) default 'cdc_export';
-declare rc integer default 0;
-declare rc2 integer default 0;
 
-declare bt datetime;
+declare sd datetime;
+declare ed datetime;
 
--- declare prefix varchar(10) default 'LHC';
--- declare hostnam varchar(50) default 'lancsman';
--- declare outdir varchar(250) default 'd:/projects/cdb/export';
+declare custpfx varchar(10);
+declare hostnam varchar(50);
+declare outdir  varchar(250);
 
 declare datafil varchar(250);
 declare metafil varchar(250);
 
-call cdc_logit( pn, concat( 'Enter (',bdt,')' ) );
+declare rc integer default 0;
+declare rc2 integer default 0;
 
-set datafil = concat(outdir,'/', prefix, '.', hostnam, '.',date_format(now(),'%Y%m%d.%H%i'),'.data');
-set metafil = concat(outdir,'/', prefix, '.', hostnam, '.',date_format(now(),'%Y%m%d.%H%i'),'.meta');
+-- Derive a start date (sd) and end date (ed) from the parameters passed in.
+-- This allows the hourly data selection query to limit the source table to a
+-- specific date range and so makes the query much more efficient when the
+-- source table is large.
 
--- Set the upper date limit to now, or the value passed in, if present
-if bdt = '' then
-   set bt = now();
+if export_upto = '' then
+  set ed = now();
  else
-   set bt = cast( bdt as datetime );
+  set ed = cast(export_upto as datetime);
  end if;
+
+if days_before <= 0 then
+  set sd = date_sub( ed, interval 14 day );
+ else
+  set sd = date_sub( ed, interval days_before day );
+ end if;
+
+-- Log entry
+call cdc_logit( pn, concat( 'Enter (',export_upto,', ',days_before,') [ From ', sd, ' to ', ed, ' ]' ) );
+
+-- Get data from config table
+select prefix, hostname, export_dir from cdc_config into custpfx, hostnam, outdir;
+
+set datafil = concat(outdir,'/', custpfx, '.', hostnam, '.',date_format(now(),'%Y%m%d.%H%i'),'.data');
+set metafil = concat(outdir,'/', custpfx, '.', hostnam, '.',date_format(now(),'%Y%m%d.%H%i'),'.meta');
+
+call cdc_logit( pn, concat( datafil ) );
+call cdc_logit( pn, concat( metafil ) );
 
 -- ------------------------
 --  Select data for export
@@ -36,9 +55,10 @@ truncate table cdc_export_data;
 insert into cdc_export_data
  select dt.hdate, dt.hhour, dt.dsid, dt.data_min, dt.data_max, dt.data_sum, dt.data_count
   from cdc_hourly_data dt join cdc_datasets ds on dt.dsid = ds.id
-  where dt.sample_time >= ds.export_from and dt.sample_time < bt;
+  where dt.sample_time between sd and ed and dt.sample_time >= ds.export_from;
 
 set rc = row_count();
+call cdc_logit( pn, CONCAT( 'Inserted ', rc, ' datasets into cdc_export_data' ) );
 
 -- ----------------------
 --  Export datasets
@@ -48,8 +68,8 @@ if rc > 0 then
   set @sql = 'select dsid, cdc_machine, cdc_object, cdc_instance, cdc_counter, speed, description ';
   set @sql = concat( @sql, ' from cdc_dataset_details dd where dd.dsid in ( select dsid from cdc_export_data ) ' );
   set @sql = concat( @sql, '  into outfile ''', metafil, ''' ' );
-  prepare ed from @sql;
-  execute ed;
+  prepare exp from @sql;
+  execute exp;
   select count(distinct dsid) from cdc_export_data into rc2;
   call cdc_logit( pn, CONCAT( 'Exported ', rc2, ' datasets to ', metafil ) );
  end if;
@@ -61,8 +81,8 @@ if rc > 0 then
 if rc > 0 then
 
   set @sql = concat( 'select * from cdc_export_data into outfile ''', datafil, ''' ' );
-  prepare ed from @sql;
-  execute ed;
+  prepare exp from @sql;
+  execute exp;
 
   -- Update the export timestamps in cdb_datasets
   update cdc_datasets ds join (

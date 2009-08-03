@@ -16,6 +16,20 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
+-- Table structure for table `cdc_config`
+--
+
+DROP TABLE IF EXISTS `cdc_config`;
+SET @saved_cs_client     = @@character_set_client;
+SET character_set_client = utf8;
+CREATE TABLE `cdc_config` (
+  `prefix` varchar(10) NOT NULL,
+  `hostname` varchar(45) NOT NULL,
+  `export_dir` varchar(45) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+SET character_set_client = @saved_cs_client;
+
+--
 -- Table structure for table `cdc_counters`
 --
 
@@ -110,7 +124,7 @@ SET character_set_client = utf8;
 CREATE TABLE `cdc_hourly_data` (
   `sample_time` datetime NOT NULL,
   `dsid` int(10) unsigned NOT NULL,
-  `hdate` datetime NOT NULL,
+  `hdate` date NOT NULL,
   `hhour` int(10) unsigned NOT NULL,
   `data_min` float NOT NULL,
   `data_max` float NOT NULL,
@@ -169,7 +183,7 @@ CREATE TABLE `cdc_log` (
   `pn` varchar(80) default NULL,
   `txt` varchar(1024) default NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=MyISAM AUTO_INCREMENT=110 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=MyISAM AUTO_INCREMENT=175 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 SET character_set_client = @saved_cs_client;
 
 --
@@ -235,38 +249,55 @@ DELIMITER ;;
 /*!50003 DROP PROCEDURE IF EXISTS `cdc_export` */;;
 /*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
 /*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `cdc_export`(
-        bdt varchar(50),
-        prefix varchar(10),
-        hostnam varchar(50),
-        outdir varchar(250)
+        export_upto varchar(50),
+        days_before int
         )
 BEGIN
 
 -- Declare variables and cursors
 declare pn varchar(50) default 'cdc_export';
-declare rc integer default 0;
-declare rc2 integer default 0;
 
-declare bt datetime;
+declare sd datetime;
+declare ed datetime;
 
--- declare prefix varchar(10) default 'LHC';
--- declare hostnam varchar(50) default 'lancsman';
--- declare outdir varchar(250) default 'd:/projects/cdb/export';
+declare custpfx varchar(10);
+declare hostnam varchar(50);
+declare outdir  varchar(250);
 
 declare datafil varchar(250);
 declare metafil varchar(250);
 
-call cdc_logit( pn, concat( 'Enter (',bdt,')' ) );
+declare rc integer default 0;
+declare rc2 integer default 0;
 
-set datafil = concat(outdir,'/', prefix, '.', hostnam, '.',date_format(now(),'%Y%m%d.%H%i'),'.data');
-set metafil = concat(outdir,'/', prefix, '.', hostnam, '.',date_format(now(),'%Y%m%d.%H%i'),'.meta');
+-- Derive a start date (sd) and end date (ed) from the parameters passed in.
+-- This allows the hourly data selection query to limit the source table to a
+-- specific date range and so makes the query much more efficient when the
+-- source table is large.
 
--- Set the upper date limit to now, or the value passed in, if present
-if bdt = '' then
-   set bt = now();
+if export_upto = '' then
+  set ed = now();
  else
-   set bt = cast( bdt as datetime );
+  set ed = cast(export_upto as datetime);
  end if;
+
+if days_before <= 0 then
+  set sd = date_sub( ed, interval 14 day );
+ else
+  set sd = date_sub( ed, interval days_before day );
+ end if;
+
+-- Log entry
+call cdc_logit( pn, concat( 'Enter (',export_upto,', ',days_before,') [ From ', sd, ' to ', ed, ' ]' ) );
+
+-- Get data from config table
+select prefix, hostname, export_dir from cdc_config into custpfx, hostnam, outdir;
+
+set datafil = concat(outdir,'/', custpfx, '.', hostnam, '.',date_format(now(),'%Y%m%d.%H%i'),'.data');
+set metafil = concat(outdir,'/', custpfx, '.', hostnam, '.',date_format(now(),'%Y%m%d.%H%i'),'.meta');
+
+call cdc_logit( pn, concat( datafil ) );
+call cdc_logit( pn, concat( metafil ) );
 
 -- ------------------------
 --  Select data for export
@@ -278,9 +309,10 @@ truncate table cdc_export_data;
 insert into cdc_export_data
  select dt.hdate, dt.hhour, dt.dsid, dt.data_min, dt.data_max, dt.data_sum, dt.data_count
   from cdc_hourly_data dt join cdc_datasets ds on dt.dsid = ds.id
-  where dt.sample_time >= ds.export_from and dt.sample_time < bt;
+  where dt.sample_time between sd and ed and dt.sample_time >= ds.export_from;
 
 set rc = row_count();
+call cdc_logit( pn, CONCAT( 'Inserted ', rc, ' datasets into cdc_export_data' ) );
 
 -- ----------------------
 --  Export datasets
@@ -290,8 +322,8 @@ if rc > 0 then
   set @sql = 'select dsid, cdc_machine, cdc_object, cdc_instance, cdc_counter, speed, description ';
   set @sql = concat( @sql, ' from cdc_dataset_details dd where dd.dsid in ( select dsid from cdc_export_data ) ' );
   set @sql = concat( @sql, '  into outfile ''', metafil, ''' ' );
-  prepare ed from @sql;
-  execute ed;
+  prepare exp from @sql;
+  execute exp;
   select count(distinct dsid) from cdc_export_data into rc2;
   call cdc_logit( pn, CONCAT( 'Exported ', rc2, ' datasets to ', metafil ) );
  end if;
@@ -303,8 +335,8 @@ if rc > 0 then
 if rc > 0 then
 
   set @sql = concat( 'select * from cdc_export_data into outfile ''', datafil, ''' ' );
-  prepare ed from @sql;
-  execute ed;
+  prepare exp from @sql;
+  execute exp;
 
   -- Update the export timestamps in cdb_datasets
   update cdc_datasets ds join (
@@ -323,21 +355,21 @@ END */;;
 /*!50003 DROP PROCEDURE IF EXISTS `cdc_import` */;;
 /*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
 /*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `cdc_import`(
-        bdt varchar(50)
+        import_upto varchar(50),
+        days_before int
         )
 BEGIN
 
-/*
 
-This procedure produces hourly summaries from data in rtg data tables.
-
-It assumes that the polling interval is the default of 5 mins (300 secs).
-
-The main query uses mappings in the cdb_counters table to convert the
-raw data to use more sustainable units (e.g. KBytes rather than bytes,
-or KPkts rather than packets).
-
-*/
+-- ----------------------------------------------------------------------
+-- This procedure produces hourly summaries from data in rtg data tables.
+--
+-- It assumes that the polling interval is the default of 5 mins (300 secs).
+--
+-- The main query uses mappings in the cdb_counters table to convert the
+-- raw data to use more sustainable units (e.g. KBytes rather than bytes,
+-- or KPkts rather than packets).
+-- ----------------------------------------------------------------------
 
 -- Declare variables and cursors
 declare pn varchar(50) default 'cdc_import';
@@ -345,6 +377,9 @@ declare rc integer default 0;
 declare tc integer default 0;
 declare rctot integer default 0;
 declare rcout integer default 0;
+
+declare sd datetime;
+declare ed datetime;
 
 declare done int default 0;
 declare tabnam varchar(50);
@@ -356,16 +391,30 @@ declare dur integer default 300;
 declare tabcur cursor for SELECT distinct rtg_data_table FROM cdc_datasets;
 declare continue handler for not found set done = 1;
 
-call cdc_logit( pn, concat( 'Enter (',bdt,')' ) );
+-- Derive a start date (sd) and end date (ed) from the parameters passed in.
+-- This allows the raw data selection query to limit the source table to a
+-- specific date range and so makes the query much more efficient when the
+-- source tables are large. (They only have an index dtime not on id)
 
-/*
-----------------------------------------------
- Prepare for import
- Create tempdata table and set the import_from
- field for each dataset to be one hour later than
- the latest sample in the hourly data table.
-----------------------------------------------
-*/
+if import_upto = '' then
+  set ed = now();
+ else
+  set ed = cast(import_upto as datetime);
+ end if;
+
+if days_before <= 0 then
+  set sd = date_sub( ed, interval 14 day );
+ else
+  set sd = date_sub( ed, interval days_before day );
+ end if;
+
+call cdc_logit( pn, concat( 'Enter (',import_upto,', ',days_before,') [ From ', sd, ' to ', ed, ' ]' ) );
+
+-- ----------------------------------------------------------------------
+--  Prepare for import
+--  Create tempdata table and set the import_from field for each dataset
+-- to be one hour later than the latest sample in the hourly data table.
+-- ----------------------------------------------------------------------
 
 -- Update hourly stats
 update cdc_datasets ds
@@ -379,12 +428,11 @@ create temporary table tempdata (
  dval float not null
  );
 
-/*
-----------------------------------------------
- Collect raw data from multiple rtg tables
- into a single tempdata table
-----------------------------------------------
-*/
+-- ----------------------------------------------
+--  Collect raw data from multiple rtg tables
+--  into a single tempdata table
+-- ----------------------------------------------
+
 open tabcur;
 
 -- Get first row from cursor
@@ -397,19 +445,8 @@ repeat
   set @sql = 'insert into tempdata ( dsid, dtime, dval ) ';
   set @sql = CONCAT( @sql, ' select ds.id as dsid, d.dtime, d.counter from rtg.', tabnam, ' d ' );
   set @sql = CONCAT( @sql, ' join cdc_interfaces ci on d.id = ci.rtg_iid join cdc_datasets ds on ci.id = ds.cdc_iid ' );
-  set @sql = CONCAT( @sql, ' where ds.rtg_data_table = ''', tabnam, ''' and dtime >= ds.import_from' );
-
-  -- Add endpoint condition, if supplied
-  if bdt = '' then
-    -- Empty param, so no condition
-    set @sql = CONCAT( @sql, ';' );
-   elseif length(bdt) < 3 then
-    -- Short param, assume its a number of days
-    set @sql = CONCAT( @sql, ' and dtime <= date_add( ds.import_from, interval ', bdt, ' day );' );
-   else
-    -- Longer param, assume its an explicit date
-    set @sql = CONCAT( @sql, ' and dtime <= ''', bdt, ''';' );
-   end if;
+  set @sql = CONCAT( @sql, ' where dtime between ''', sd, ''' and ''', ed, ''' ' );  -- Limit source to date range
+  set @sql = CONCAT( @sql, '  and ds.rtg_data_table = ''', tabnam, ''' and dtime >= ds.import_from' );
 
   prepare uht from @sql;
   execute uht;
@@ -424,20 +461,16 @@ select count(*) from tempdata into rc;
 
 call cdc_logit( pn, concat( 'Selected ', rc ,' raw data rows from ', tc ,' tables' ) );
 
-/*
-----------------------------------------------
- Process the temp table of raw data
-----------------------------------------------
-*/
+-- --------------------------------------------
+--  Process the temp table of raw data
+-- --------------------------------------------
 
 -- Add an index to speed up processing
 alter table tempdata add index idx1 (dsid);
 
-/*
-To prevent the query from summarising the final (potentially incomplete) hour, we
-find the latest timestamp for each raw dataset, round it down to a whole hour and
-only process data less than (prior to) this high water mark.
-*/
+-- To prevent the query from summarising the final (potentially incomplete) hour, we
+-- find the latest timestamp for each raw dataset, round it down to a whole hour and
+-- only process data less than (prior to) this high water mark.
 
 -- Update cdb_datasets with raw data high water marks
 update cdc_datasets ds join (
@@ -712,7 +745,7 @@ DELIMITER ;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-08-01 18:54:59
+-- Dump completed on 2009-08-03 11:24:45
 -- MySQL dump 10.11
 --
 -- Host: localhost    Database: cdc_rtg
@@ -767,4 +800,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-08-01 18:54:59
+-- Dump completed on 2009-08-03 11:24:48

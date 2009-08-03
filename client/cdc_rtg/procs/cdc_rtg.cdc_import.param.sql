@@ -1,3 +1,4 @@
 
-        bdt varchar(50)
+        import_upto varchar(50),
+        days_before int
         
