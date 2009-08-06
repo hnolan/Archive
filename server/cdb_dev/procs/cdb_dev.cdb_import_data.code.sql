@@ -72,6 +72,14 @@ if rc = 0 then
   leave main;
  end if;
 
+-- update latest times in m05_datasets
+set @sql = concat( 'update m05_datasets ds join ( ' );
+set @sql = concat( @sql, '  select cdb_dataset_id, max(sample_time) as ''latest'' from ', hourtab, ' group by cdb_dataset_id ' );
+set @sql = concat( @sql, '   ) as t on ds.id = t.cdb_dataset_id set ds.dt20_latest=t.latest; ' );
+
+prepare upd from @sql;
+execute upd;
+
 -- Log valid entry
 call cdb_logit( pn, concat( 'Exit. Inserted ', rc, ' data rows into ', hourtab ) );
 
