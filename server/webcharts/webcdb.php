@@ -108,51 +108,13 @@ function print_array($dbh)
 
 <script language=vbs>
 <!--
-
-'---------------------------------------
-'	VBscript code for page starts here
-'---------------------------------------
-
 <?php
  print_array($dbh);
 ?>
-
-'---------------------------------------
-Sub Window_OnLoad
-	cmbPrefix_onChange
-End Sub
- 
-'---------------------------------------
-Sub cmbPrefix_onChange
-Dim pfx,h,i
-
-' Update System Types
-	pfx = document.FormFP1.cmbPrefix.Value
-	
-	h = "<select size='1' name='cmbSystemType'>"
-	For i = 0 to (UBound(arrPST)/2 )
-		If arrPST(i*2) = pfx Then
-			h = h & "<option value='" & arrPST((i*2)+1) & "'>" & arrPST((i*2)+1) & "</option>"
-		  End If
-	  Next
-	h = h & "</select>"
-	document.all.spnSystemType.innerHTML = h
-
-End Sub
-  
-'---------------------------------------
-Function FormFP1_onReset()
-	cmbPrefix_onChange
-End Function
-
-'---------------------------------------
-Function FormFP1_onSubmit()
-	FormFP1.txtCustomer.Value = FormFP1.cmbPrefix.Options(FormFP1.cmbPrefix.SelectedIndex).Text
-	FormFP1_onsubmit = True
-End Function
-
 -->
 </script>
+
+<script src="scripts/webcdb.vbs" language="vbs" ></script>
 
 <?php
 $dbh = NULL;  # close connection
