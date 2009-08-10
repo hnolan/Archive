@@ -8,6 +8,7 @@ declare ed datetime;
 
 declare custpfx varchar(10);
 declare hostnam varchar(50);
+declare filedat varchar(30);
 declare outdir  varchar(250);
 
 declare datafil varchar(250);
@@ -39,11 +40,10 @@ call cdc_logit( pn, concat( 'Enter (',export_upto,', ',days_before,') [ From ', 
 -- Get data from config table
 select prefix, hostname, export_dir from cdc_config into custpfx, hostnam, outdir;
 
-set datafil = concat(outdir,'/', custpfx, '.', hostnam, '.',date_format(now(),'%Y%m%d.%H%i'),'.data');
-set metafil = concat(outdir,'/', custpfx, '.', hostnam, '.',date_format(now(),'%Y%m%d.%H%i'),'.meta');
-
-call cdc_logit( pn, concat( datafil ) );
-call cdc_logit( pn, concat( metafil ) );
+-- Initialise filenames
+set filedat = date_format(now(),'%Y%m%d.%H%i%s');
+set datafil = concat(outdir,'/', custpfx, '.', hostnam, '.', filedat, '.data');
+set metafil = concat(outdir,'/', custpfx, '.', hostnam, '.', filedat, '.meta');
 
 -- ------------------------
 --  Select data for export
