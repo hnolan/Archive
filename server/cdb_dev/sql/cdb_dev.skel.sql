@@ -140,7 +140,7 @@ CREATE TABLE `m01_machines` (
   `id` int(10) unsigned NOT NULL auto_increment,
   `cdb_customer_id` int(10) unsigned NOT NULL,
   `name` varchar(50) NOT NULL,
-  `type` varchar(50) NOT NULL default 'unknown',
+  `machine_type` varchar(50) NOT NULL default 'unknown',
   `subtype` varchar(50) NOT NULL default 'unknown',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `IDX_machine_name_unique` USING BTREE (`cdb_customer_id`,`name`),
@@ -272,13 +272,13 @@ CREATE TABLE `m07_dataset_map` (
 SET character_set_client = @saved_cs_client;
 
 --
--- Table structure for table `tempds`
+-- Table structure for table `template_ds`
 --
 
-DROP TABLE IF EXISTS `tempds`;
+DROP TABLE IF EXISTS `template_ds`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
-CREATE TABLE `tempds` (
+CREATE TABLE `template_ds` (
   `cdc_dataset_id` int(10) unsigned NOT NULL,
   `cdc_machine` varchar(45) NOT NULL,
   `cdc_object` varchar(45) NOT NULL,
@@ -286,17 +286,17 @@ CREATE TABLE `tempds` (
   `cdc_counter` varchar(45) NOT NULL,
   `speed` bigint(20) unsigned NOT NULL,
   `description` varchar(250) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 SET character_set_client = @saved_cs_client;
 
 --
--- Table structure for table `tempdt`
+-- Table structure for table `template_dt`
 --
 
-DROP TABLE IF EXISTS `tempdt`;
+DROP TABLE IF EXISTS `template_dt`;
 SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = utf8;
-CREATE TABLE `tempdt` (
+CREATE TABLE `template_dt` (
   `sample_date` date NOT NULL,
   `sample_hour` int(10) unsigned NOT NULL,
   `cdc_dataset_id` int(10) unsigned NOT NULL,
@@ -865,7 +865,7 @@ DELIMITER ;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-08-06 14:24:57
+-- Dump completed on 2009-08-10 10:17:05
 -- MySQL dump 10.11
 --
 -- Host: localhost    Database: cdb_dev
@@ -947,4 +947,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-08-06 14:24:57
+-- Dump completed on 2009-08-10 10:17:05
