@@ -22,4 +22,4 @@ CWD=/home/huw/dev/cdb
 DB=cdb_utils
 DUMPFIL=${CWD}/misc/${DB}/sql/${DB}.skel.sql
 
-mysqldump -p$PWD -u root $DB --no-data --routines >$DUMPFIL
+mysqldump -p$PWD -u root $DB --no-data --routines --skip-dump-date >$DUMPFIL
