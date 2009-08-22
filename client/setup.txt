@@ -1,0 +1,10 @@
+useradd -m imerja
+usermod -G imerja mysql
+
+mkdir /var/cdc
+chown imerja:imerja /var/cdc
+chmod 755 /var/cdc
+
+mkdir /var/cdc/export
+chown imerja:imerja /var/cdc/export
+chmod 775 /var/cdc/export

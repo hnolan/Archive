@@ -1,0 +1,7 @@
+#
+# use /bin/sh to run commands, no matter what /etc/passwd says
+SHELL=/bin/sh
+#
+# Run daily job thirty minutes after midnight, every day
+30 0 * * *       $HOME/cdc/bin/cdc_daily.sh >> $HOME/cdc/cron.log 2>&1
+
