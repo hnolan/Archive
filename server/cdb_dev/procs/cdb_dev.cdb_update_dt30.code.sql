@@ -25,12 +25,29 @@ declare rcnew integer default 0;
 declare done int default 0;
 declare tabnam varchar(50);
 
+declare sd datetime;
+declare ed datetime;
+
 -- Get list of data table prefixes (each prefix that has a datasource)
 declare tabcur cursor for select distinct prefix from m00_customers m0 join m06_datasources m6 on m0.id = m6.cdb_customer_id;
 declare continue handler for not found set done = 1;
 
+if update_upto = '' then
+  set ed = now();
+ else
+  set ed = cast(update_upto as datetime);
+ end if;
+
+if days_before <= 0 then
+  set sd = date_sub( ed, interval 14 day );
+ else
+  set sd = date_sub( ed, interval days_before day );
+ end if;
+
+call cdb_logit( pn, concat( 'Enter (',update_upto,', ',days_before,') [ From ', sd, ' to ', ed, ' ]' ) );
+
 -- Log entry
-call cdb_logit( pn, concat( 'Enter - data update - daily' ) );
+-- call cdb_logit( pn, concat( 'Enter - data update - daily' ) );
 
 -- Create the temporary table with columns from dt20_hourly_data
 -- and a column for day of week (dow : sun=1, mon=2 ..... sat=7)
@@ -58,10 +75,10 @@ repeat
 --   round down latest hourly data to a whole day and select data earlier
 
   set @sql = 'insert into temp_data ';
-  set @sql = CONCAT( @sql, 'select dt.*, dayofweek(dt.sample_date) as sample_dow from hourly_data_', pfx, ' dt ' );
+  set @sql = CONCAT( @sql, 'select dt.*, dayofweek(dt.sample_date) as sample_dow from hourly_data_', lower(pfx), ' dt ' );
   set @sql = CONCAT( @sql, '   inner join m05_datasets d on dt.cdb_dataset_id = d.id ' );
-  set @sql = CONCAT( @sql, '  where dt.sample_date > d.dt30_latest and ' );
-  set @sql = CONCAT( @sql, '        dt.sample_time < date(d.dt20_latest); ' );
+  set @sql = CONCAT( @sql, '  where dt.sample_date > d.dt30_latest and dt.sample_time < date(d.dt20_latest) ' );
+  set @sql = CONCAT( @sql, '    and dt.sample_time between ''', sd, ''' and ''', ed, '''; ' );
 
   prepare itd from @sql;
   execute itd;

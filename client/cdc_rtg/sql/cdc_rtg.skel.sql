@@ -745,7 +745,7 @@ DELIMITER ;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-08-10 10:17:09
+-- Dump completed on 2009-08-22 10:57:53
 -- MySQL dump 10.11
 --
 -- Host: localhost    Database: cdc_rtg
@@ -800,4 +800,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-08-10 10:17:09
+-- Dump completed on 2009-08-22 10:57:53

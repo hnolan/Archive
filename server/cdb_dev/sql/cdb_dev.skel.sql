@@ -32,6 +32,21 @@ CREATE TABLE `cdb_log` (
 SET character_set_client = @saved_cs_client;
 
 --
+-- Temporary table structure for view `dataset_details`
+--
+
+DROP TABLE IF EXISTS `dataset_details`;
+/*!50001 DROP VIEW IF EXISTS `dataset_details`*/;
+/*!50001 CREATE TABLE `dataset_details` (
+  `dataset_id` int(10) unsigned,
+  `prefix` varchar(20),
+  `machine` varchar(50),
+  `object` varchar(50),
+  `instance` varchar(250),
+  `counter` varchar(50)
+) ENGINE=MyISAM */;
+
+--
 -- Table structure for table `dt20_hourly_data`
 --
 
@@ -683,7 +698,10 @@ END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `cdb_update_dt30` */;;
 /*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `cdb_update_dt30`()
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `cdb_update_dt30`(
+        update_upto varchar(50),
+        days_before int
+        )
 BEGIN
 
 -- Additional block to allow early exit from sproc
@@ -711,12 +729,29 @@ declare rcnew integer default 0;
 declare done int default 0;
 declare tabnam varchar(50);
 
+declare sd datetime;
+declare ed datetime;
+
 -- Get list of data table prefixes (each prefix that has a datasource)
 declare tabcur cursor for select distinct prefix from m00_customers m0 join m06_datasources m6 on m0.id = m6.cdb_customer_id;
 declare continue handler for not found set done = 1;
 
+if update_upto = '' then
+  set ed = now();
+ else
+  set ed = cast(update_upto as datetime);
+ end if;
+
+if days_before <= 0 then
+  set sd = date_sub( ed, interval 14 day );
+ else
+  set sd = date_sub( ed, interval days_before day );
+ end if;
+
+call cdb_logit( pn, concat( 'Enter (',update_upto,', ',days_before,') [ From ', sd, ' to ', ed, ' ]' ) );
+
 -- Log entry
-call cdb_logit( pn, concat( 'Enter - data update - daily' ) );
+-- call cdb_logit( pn, concat( 'Enter - data update - daily' ) );
 
 -- Create the temporary table with columns from dt20_hourly_data
 -- and a column for day of week (dow : sun=1, mon=2 ..... sat=7)
@@ -744,10 +779,10 @@ repeat
 --   round down latest hourly data to a whole day and select data earlier
 
   set @sql = 'insert into temp_data ';
-  set @sql = CONCAT( @sql, 'select dt.*, dayofweek(dt.sample_date) as sample_dow from hourly_data_', pfx, ' dt ' );
+  set @sql = CONCAT( @sql, 'select dt.*, dayofweek(dt.sample_date) as sample_dow from hourly_data_', lower(pfx), ' dt ' );
   set @sql = CONCAT( @sql, '   inner join m05_datasets d on dt.cdb_dataset_id = d.id ' );
-  set @sql = CONCAT( @sql, '  where dt.sample_date > d.dt30_latest and ' );
-  set @sql = CONCAT( @sql, '        dt.sample_time < date(d.dt20_latest); ' );
+  set @sql = CONCAT( @sql, '  where dt.sample_date > d.dt30_latest and dt.sample_time < date(d.dt20_latest) ' );
+  set @sql = CONCAT( @sql, '    and dt.sample_time between ''', sd, ''' and ''', ed, '''; ' );
 
   prepare itd from @sql;
   execute itd;
@@ -834,6 +869,180 @@ BEGIN
   select * from cdb_log order by id desc limit 100;
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `web_get_chart_data` */;;
+/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `web_get_chart_data`(
+ p_prefix varchar(50),
+ p_seltype varchar(50),
+ p_selection varchar(50),
+ p_startdate datetime,
+ p_enddate datetime,
+ p_period int
+ )
+BEGIN
+
+-- Additional block to allow early exit from sproc
+main: BEGIN
+
+-- Declare variables and cursors
+declare done int default 0;
+-- declare piv varchar(50);
+-- declare pivcur cursor for select pivot from pivot;
+declare continue handler for 1051 set done = 1;
+
+drop table if exists TempDatasets;
+drop table if exists TempData;
+drop table if exists TempSeries;
+
+-- *************** Param validation ***************
+
+set @st = p_startdate;
+set @et = p_enddate;
+-- set @st = '2009-04-06';
+-- set @et = '2009-04-07';
+
+-- *************** Dataset Selection ***************
+
+create temporary table TempDatasets (
+  dataset_id int not null,
+  prefix varchar(50) not null,
+  selection varchar(50) not null,
+  series varchar(250) not null
+  );
+
+if p_seltype = 'Machine' then
+  -- Machine selected
+  insert into TempDatasets ( dataset_id, prefix, selection, series )
+   select dd.dataset_id, dd.prefix, dd.counter as selection, dd.instance as series
+    from dataset_details dd
+   where dd.prefix = p_prefix and dd.machine = p_selection;
+ else
+  -- Counter selected
+  insert into TempDatasets ( dataset_id, prefix, selection, series )
+   select dd.dataset_id, dd.prefix, dd.machine as selection, dd.instance as series
+    from dataset_details dd
+   where dd.prefix = p_prefix and dd.counter = p_selection;
+ end if;
+
+-- select * from TempDatasets;
+-- drop table TempDatasets;
+
+
+-- *************** Table specific portion ***************
+
+create temporary table TempData (
+  sample_time datetime not null,
+  dataset_id int not null,
+  data_min float not null,
+  data_max float not null,
+  data_sum float not null,
+  data_count int not null
+  );
+
+if p_period = 21 then
+
+  insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )
+  select date_add('1900-01-01', interval sample_hour hour), cdb_dataset_id, min(data_min), max(data_max), sum(data_sum), sum(data_count)
+   from hourly_data_sthc dt
+    inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id
+   where sample_time >= @st and sample_time < @et
+   group by sample_hour, cdb_dataset_id;
+ else
+  insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )
+  select sample_time, cdb_dataset_id, data_min, data_max, data_sum, data_count
+   from hourly_data_sthc dt
+    inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id
+   where sample_time >= @st and sample_time < @et;
+ end if;
+
+-- select * from TempData;
+
+-- *************** Data Processing portion ***************
+
+create temporary table TempSeries (
+  sample_time datetime not null,
+  data_type varchar(20) not null,
+  data_val float not null,
+  selection varchar(50) not null,
+  series varchar(250) not null
+  );
+
+insert into TempSeries ( sample_time, data_type, data_val, selection, series )
+ select sample_time, 'Min', data_min, selection, series from TempData dt
+ inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
+
+insert into TempSeries ( sample_time, data_type, data_val, selection, series )
+ select sample_time, 'Max', data_max, selection, series from TempData dt
+ inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
+
+insert into TempSeries ( sample_time, data_type, data_val, selection, series )
+ select sample_time, 'Avg', data_sum / data_count, selection, series from TempData dt
+ inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
+
+insert into TempSeries ( sample_time, data_type, data_val, selection, series )
+ select sample_time, 'Cnt', data_count, selection, series from TempData dt
+ inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
+
+drop table TempDatasets;
+drop table TempData;
+
+select count(*) from TempSeries into @rc;
+
+-- Exit here if no data was found
+if @rc <= 0 then
+  drop table TempSeries;
+  leave main;
+ end if;
+
+select selection, series, data_type, sample_time, data_val from TempSeries
+ order by selection, series, data_type, sample_time;
+
+drop table TempSeries;
+
+END main;
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `web_get_machine_counter` */;;
+/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `web_get_machine_counter`(p_prefix varchar(50), mc varchar(50))
+BEGIN
+
+if mc = 'Machine' then
+  select distinct name from m01_machines m
+   inner join m00_customers c on c.id = m.cdb_customer_id
+   where prefix = p_prefix;
+ else
+  if mc = 'Counter' then
+    select distinct counter from dataset_details
+     where prefix = p_prefix;
+   else
+    select distinct machine, counter from dataset_details
+     where prefix = p_prefix;
+   end if;
+ end if;
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `web_get_prefix_type` */;;
+/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `web_get_prefix_type`(p1 varchar(50))
+BEGIN
+
+if p1 = 'Prefix' then
+  -- Join on machine to only select customers with machines defined
+  select distinct c.prefix, c.fullname from m00_customers c
+   inner join m01_machines m on c.id = m.cdb_customer_id
+   order by c.fullname;
+ else
+  select distinct c.prefix, m.machine_type from m00_customers c
+   inner join m01_machines m on c.id = m.cdb_customer_id
+   order by c.prefix;
+ end if;
+
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `xx` */;;
 /*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
 /*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `xx`()
@@ -855,6 +1064,16 @@ truncate table cdb_log;
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 DELIMITER ;
+
+--
+-- Final view structure for view `dataset_details`
+--
+
+/*!50001 DROP TABLE `dataset_details`*/;
+/*!50001 DROP VIEW IF EXISTS `dataset_details`*/;
+/*!50001 CREATE ALGORITHM=UNDEFINED */
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `dataset_details` AS select `m5`.`id` AS `dataset_id`,`m0`.`prefix` AS `prefix`,`m1`.`name` AS `machine`,`m2`.`name` AS `object`,`m3`.`name` AS `instance`,`m4`.`name` AS `counter` from (((((`m05_datasets` `m5` join `m04_counters` `m4` on((`m4`.`id` = `m5`.`cdb_counter_id`))) join `m03_instances` `m3` on((`m3`.`id` = `m5`.`cdb_instance_id`))) join `m02_objects` `m2` on((`m2`.`id` = `m3`.`cdb_object_id`))) join `m01_machines` `m1` on((`m1`.`id` = `m3`.`cdb_machine_id`))) join `m00_customers` `m0` on((`m0`.`id` = `m1`.`cdb_customer_id`))) */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -865,7 +1084,7 @@ DELIMITER ;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-08-10 10:17:05
+-- Dump completed on 2009-08-22 10:57:51
 -- MySQL dump 10.11
 --
 -- Host: localhost    Database: cdb_dev
@@ -947,4 +1166,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2009-08-10 10:17:05
+-- Dump completed on 2009-08-22 10:57:52
