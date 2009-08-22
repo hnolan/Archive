@@ -238,13 +238,14 @@ class CdbImportDB
 
 	def import_data(df)
 
+		@db.query( "truncate table tempds" )
 		@db.query( "load data infile '#{df.metafull}' into table tempds" )
 		log_info "Imported #{@db.affected_rows} rows from #{df.metafile} into tempds"
+		log_info "call cdb_check_datasets( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
 
+		@db.query( "truncate table tempdt" )
 		@db.query( "load data infile '#{df.datafull}' into table tempdt" )
 		log_info "Imported #{@db.affected_rows} rows from #{df.datafile} into tempdt"
-	
-		log_info "call cdb_check_datasets( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
 		log_info "call cdb_import_data( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
 	
 	end

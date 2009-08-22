@@ -41,7 +41,7 @@ imp.each { |df|
 		cdb.import_data(df)
 		imp.move_to_save(df) 
 	 rescue
-	  log.error "Import of #{df} failed : #{$!}"
+	  logger.error "Import of #{df} failed : #{$!}"
 		imp.move_to_bad(df) 
 	 end
 	}
