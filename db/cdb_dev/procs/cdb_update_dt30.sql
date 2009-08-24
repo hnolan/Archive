@@ -1,3 +1,10 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdb_dev`.`cdb_update_dt30` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `cdb_update_dt30` (
+        update_upto varchar(50),
+        days_before int
+        )
 BEGIN
 
 -- Additional block to allow early exit from sproc
@@ -156,4 +163,6 @@ drop table temp_data;
 
 END main;
 
-END
+END $$
+
+DELIMITER ;

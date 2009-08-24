@@ -1,3 +1,10 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdb_dev`.`web_get_machine_counter` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `web_get_machine_counter` (
+        p_prefix varchar(50),
+        mc varchar(50)
+        )
 BEGIN
 
 if mc = 'Machine' then
@@ -14,4 +21,6 @@ if mc = 'Machine' then
    end if;
  end if;
 
-END
+END $$
+
+DELIMITER ;

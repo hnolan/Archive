@@ -1,3 +1,11 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdb_dev`.`cdb_import_data` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `cdb_import_data` (
+        p_prefix varchar(10),
+        p_srcsrv varchar(45),
+        p_srcapp varchar(45)
+        )
 BEGIN
 
 /*
@@ -86,4 +94,6 @@ call cdb_logit( pn, concat( 'Exit. Inserted ', rc, ' data rows into ', hourtab )
 -- End of main block
 END;
 
-END
+END $$
+
+DELIMITER ;

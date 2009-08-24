@@ -1,3 +1,14 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdb_dev`.`web_get_chart_data` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `web_get_chart_data` (
+ p_prefix varchar(50),
+ p_seltype varchar(50),
+ p_selection varchar(50),
+ p_startdate datetime,
+ p_enddate datetime,
+ p_period int
+ )
 BEGIN
 
 -- Additional block to allow early exit from sproc
@@ -7,6 +18,10 @@ main: BEGIN
 declare done int default 0;
 -- declare piv varchar(50);
 -- declare pivcur cursor for select pivot from pivot;
+
+declare sd datetime;
+declare ed datetime;
+
 declare continue handler for 1051 set done = 1;
 
 drop table if exists TempDatasets;
@@ -15,10 +30,8 @@ drop table if exists TempSeries;
 
 -- *************** Param validation ***************
 
-set @st = p_startdate;
-set @et = p_enddate;
--- set @st = '2009-04-06';
--- set @et = '2009-04-07';
+set sd = p_startdate;
+set ed = p_enddate;
 
 -- *************** Dataset Selection ***************
 
@@ -59,19 +72,25 @@ create temporary table TempData (
   );
 
 if p_period = 21 then
-
-  insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )
-  select date_add('1900-01-01', interval sample_hour hour), cdb_dataset_id, min(data_min), max(data_max), sum(data_sum), sum(data_count)
-   from hourly_data_sthc dt
-    inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id
-   where sample_time >= @st and sample_time < @et
-   group by sample_hour, cdb_dataset_id;
+  set @sql = concat( 'insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )' );
+  set @sql = concat( @sql, 'select date_add(''1900-01-01'', interval sample_hour hour), cdb_dataset_id, min(data_min), max(data_max), sum(data_sum), sum(data_count)' );
+  set @sql = concat( @sql, ' from hourly_data_', lower(p_prefix), ' dt inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id' );
+  set @sql = concat( @sql, ' where sample_time >= ''', sd, ''' and sample_time < ''', ed, ''' ' );
+  set @sql = concat( @sql, ' group by sample_hour, cdb_dataset_id;' );
+  prepare tmpd from @sql;
+  execute tmpd;
+ elseif p_period = 20 then
+  set @sql = concat( 'insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )' );
+  set @sql = concat( @sql, 'select sample_time, cdb_dataset_id, data_min, data_max, data_sum, data_count' );
+  set @sql = concat( @sql, ' from hourly_data_', lower(p_prefix), ' dt inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id' );
+  set @sql = concat( @sql, ' where sample_time >= ''', sd, ''' and sample_time < ''', ed, '''; ' );
+  prepare tmpd from @sql;
+  execute tmpd;
  else
   insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )
   select sample_time, cdb_dataset_id, data_min, data_max, data_sum, data_count
-   from hourly_data_sthc dt
-    inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id
-   where sample_time >= @st and sample_time < @et;
+   from dt30_daily_data dt inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id
+   where sample_time >= sd and sample_time < ed;
  end if;
 
 -- select * from TempData;
@@ -120,4 +139,6 @@ drop table TempSeries;
 
 END main;
 
-END
+END $$
+
+DELIMITER ;

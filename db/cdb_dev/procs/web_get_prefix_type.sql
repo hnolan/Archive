@@ -1,3 +1,7 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdb_dev`.`web_get_prefix_type` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `web_get_prefix_type` (p1 varchar(50))
 BEGIN
 
 if p1 = 'Prefix' then
@@ -12,4 +16,6 @@ if p1 = 'Prefix' then
  end if;
 
 
-END
+END $$
+
+DELIMITER ;

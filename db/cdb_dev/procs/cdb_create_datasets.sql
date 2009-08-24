@@ -1,3 +1,7 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdb_dev`.`cdb_create_datasets` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `cdb_create_datasets` ()
 BEGIN
 
 /*
@@ -160,4 +164,6 @@ drop temporary table tt10;
 
 END main;
 
-END
+END $$
+
+DELIMITER ;

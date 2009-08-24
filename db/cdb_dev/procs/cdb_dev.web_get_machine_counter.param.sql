@@ -1,1 +1,0 @@
-p_prefix varchar(50), mc varchar(50)

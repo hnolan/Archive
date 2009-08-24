@@ -1,3 +1,11 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdb_dev`.`cdb_check_datasets` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `cdb_check_datasets` (
+        p_prefix varchar(10),
+        p_srcsrv varchar(45),
+        p_srcapp varchar(45)
+        )
 BEGIN
 
 /*
@@ -88,4 +96,6 @@ call cdb_logit( pn, concat( 'Exit - ', rc, ' new dataset mappings created' ) );
 
 END main;
 
-END
+END $$
+
+DELIMITER ;
