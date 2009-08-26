@@ -33,6 +33,8 @@ class CdbImportDir
 
 		log_info "Import directory, #@dirname"
 
+		raise "Permission problem. Directory #{@dirname} is not writable" unless File.writable?(@dirname)
+
 		# Initialise hashes
 		@newdata = Hash.new		
 		@baddata = Hash.new		
@@ -65,7 +67,7 @@ class CdbImportDir
 				df = CdbDatafile.new(@holddir,f)
 				@baddata[df.srckey] = 1
 			 rescue 
-				log_error "'#{$!}' exception while processing '#{f}' in '#{@holddir}'. File ignored"
+				log_error "'#{$!}' error while processing '#{f}' in '#{@holddir}'. File ignored"
 			 end
 		 end
 
@@ -81,8 +83,12 @@ class CdbImportDir
 				@newdata[df.sortkey] = df
 				move_to_hold(df) if @baddata.has_key?(df.srckey)
 			 rescue 
-				log_error "'#{$!}' exception while processing '#{f}' in '#{@dirname}'. Moving file to '#{@baddir}'"
-				FileUtils.move( File.join( @dirname, f ), File.join( @baddir, f ) )
+			 	if $!.message =~ /Permission problem/
+			 		raise
+			 	 else
+					log_error "'#{$!}' error while processing #{@dirname}/#{f}. Moving file to '#{@baddir}'"
+					FileUtils.move( File.join( @dirname, f ), File.join( @baddir, f ) )
+				 end
 			 end
 		 end
 		
@@ -139,6 +145,7 @@ class CdbImportDir
 	def check_dir(dtype)
 		dname = File.join( @dirname, dtype )	
 		FileUtils.mkdir dname unless File.directory?(dname)
+		raise "Permission problem. Directory #{dname} is not writable" unless File.writable?(dname)
 		dname
 	end
 
@@ -177,7 +184,11 @@ class CdbDatafile
 		@metafull = File.join( @datapath, @metafile )
 
 		# Check that *.meta file exists
-		raise "No meta file" unless FileTest.exist?("#@metafull")
+		raise "No meta file" unless FileTest.exist?(@metafull)
+
+		# Check that we have the rights to move these files
+		raise "Permission problem. #@metafull is not writable" unless File.writable?(@metafull)
+		raise "Permission problem. #@datafull is not writable" unless File.writable?(@datafull)
 		
 	end
 
@@ -193,8 +204,17 @@ class CdbDatafile
 		datanew = File.join( dname, @datafile )
 		
 		# Move the pair to new directory
-		FileUtils.move( @metafull, metanew )
-		FileUtils.move( @datafull, datanew )
+		begin
+			FileUtils.move( @metafull, metanew )
+		 rescue
+			raise "Move failed for #{@metafull} to #{metanew}: $!"
+		 end
+		
+		begin
+			FileUtils.move( @datafull, datanew )
+		 rescue
+			raise "Move failed for #{@datafull} to #{datanew}: $!"
+		 end
 
 		# Update instance variables
 		@dirname = dname
@@ -222,16 +242,18 @@ class CdbImportDB
 
 	include MyLog
 
-	def initialize( logger = nil )
+	def initialize( conninfo, logger = nil )
+
+		host, user, pswd, db = conninfo
 
 		# Set up logging for this instance
 		@log = logger.class == Logger ? logger : Logger.new(STDOUT)
 
-		@db = Mysql.new('localhost', 'root', 'flg', 'cdb_dev' )
+		@db = Mysql.new( host, user, pswd, db  )
+		log_debug "Connected to database #{db} on #{host}"		
 
 		@db.query( "create temporary table tempds like template_ds" )
 		@db.query( "create temporary table tempdt like template_dt" )
-		
 		log_debug "Created temporary tables, tempds & tempdt"		
 		
 	end

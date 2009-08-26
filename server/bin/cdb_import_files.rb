@@ -25,7 +25,14 @@ logger.level = Logger::DEBUG
 logger.info ""	# Blank line to aid log readability
 logger.info "---- Entering CDB Import ----"
 
-imp = CdbImportDir.new( "E:/Dev/TestData/CDB", logger )
+begin
+	imp = CdbImportDir.new( "/var/cdb/import", logger )
+ rescue
+	puts "** ERROR: Failed to scan import directory: #{$!}"
+	logger.error "Failed to scan import directory: #{$!}"
+	logger.info "---- Leaving CDB Import (Aborted) ----"
+  exit
+ end
 
 # Leave early if there were no new files
 if imp.count == 0
@@ -34,8 +41,17 @@ if imp.count == 0
 	exit
  end
 
-cdb = CdbImportDB.new(logger) 
+conninfo = [ 'localhost', 'root', 'passport', 'cdb_dev' ]
 
+begin
+	cdb = CdbImportDB.new( conninfo, logger ) 
+ rescue
+	puts "** ERROR: Failed to connect to database: #{$!}"
+	logger.error "Failed to connect to database: #{$!}"
+	logger.info "---- Leaving CDB Import (Aborted) ----"
+  exit
+ end
+	
 imp.each { |df| 
 	begin
 		cdb.import_data(df)
