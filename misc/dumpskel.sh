@@ -3,23 +3,31 @@ CWD=/home/huw/dev/cdb
 
 # ---------------------------------------------------
 
-#DB=cdb_dev
-#DUMPFIL=${CWD}/server/${DB}/sql/${DB}.skel.sql
-#
-#mysqldump -p$PWD -u root ${DB} --no-data --routines >$DUMPFIL
-#mysqldump -p$PWD -u root ${DB} m00_customers m06_datasources >>$DUMPFIL
+DB=cdb_dev
+DUMPFIL=${CWD}/db/${DB}/${DB}.skel.sql
+
+mysqldump -p$PWD -u root ${DB} --no-data --routines --skip-dump-date >$DUMPFIL
+mysqldump -p$PWD -u root ${DB} m00_customers m06_datasources --skip-dump-date >>$DUMPFIL
+
+# ---------------------------------------------------
+
+DB=cdb_test
+DUMPFIL=${CWD}/db/${DB}/${DB}.skel.sql
+
+mysqldump -p$PWD -u root ${DB} --no-data --routines --skip-dump-date >$DUMPFIL
+mysqldump -p$PWD -u root ${DB} m00_customers m06_datasources --skip-dump-date >>$DUMPFIL
 
 # ---------------------------------------------------
 
 #DB=cdc_rtg
-#DUMPFIL=${CWD}/client/${DB}/sql/${DB}.skel.sql
+#DUMPFIL=${CWD}/db/${DB}/${DB}.skel.sql
 #
-#mysqldump -p$PWD -u root $DB --no-data --routines >$DUMPFIL
-#mysqldump -p$PWD -u root $DB cdc_counters        >>$DUMPFIL
+#mysqldump -p$PWD -u root $DB --no-data --routines --skip-dump-date >$DUMPFIL
+#mysqldump -p$PWD -u root $DB cdc_counters --skip-dump-date >>$DUMPFIL
 
 # ---------------------------------------------------
 
 DB=cdb_utils
-DUMPFIL=${CWD}/misc/${DB}/sql/${DB}.skel.sql
+DUMPFIL=${CWD}/db/${DB}/${DB}.skel.sql
 
 mysqldump -p$PWD -u root $DB --no-data --routines --skip-dump-date >$DUMPFIL
