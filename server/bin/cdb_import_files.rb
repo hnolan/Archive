@@ -14,8 +14,9 @@
 
 require "logger"
 require "cdbimport"
+require "config"
 
-logger = Logger.new("cdb_import_files.log")
+logger = Logger.new(CONFIG[:logfile])
 
 # logger = Logger.new(STDOUT)
 logger.progname = "CDB Import"
@@ -26,7 +27,7 @@ logger.info ""	# Blank line to aid log readability
 logger.info "---- Entering CDB Import ----"
 
 begin
-	imp = CdbImportDir.new( "/var/cdb/import", logger )
+	imp = CdbImportDir.new( CONFIG[:importdir], logger )
  rescue
 	puts "** ERROR: Failed to scan import directory: #{$!}"
 	logger.error "Failed to scan import directory: #{$!}"
@@ -41,10 +42,8 @@ if imp.count == 0
 	exit
  end
 
-conninfo = [ 'localhost', 'root', 'passport', 'cdb_dev' ]
-
 begin
-	cdb = CdbImportDB.new( conninfo, logger ) 
+	cdb = CdbImportDB.new( CONFIG[:db_info], logger ) 
  rescue
 	puts "** ERROR: Failed to connect to database: #{$!}"
 	logger.error "Failed to connect to database: #{$!}"
@@ -57,7 +56,8 @@ imp.each { |df|
 		cdb.import_data(df)
 		imp.move_to_save(df) 
 	 rescue
-	  logger.error "Import of #{df} failed : #{$!}"
+		puts "** ERROR: Failed to import #{df} : #{$!}"
+	  logger.error "Failed to import #{df} : #{$!}"
 		imp.move_to_bad(df) 
 	 end
 	}

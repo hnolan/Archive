@@ -67,7 +67,7 @@ class CdbImportDir
 				df = CdbDatafile.new(@holddir,f)
 				@baddata[df.srckey] = 1
 			 rescue 
-				log_error "'#{$!}' error while processing '#{f}' in '#{@holddir}'. File ignored"
+				log_error "'#{$!}' error while processing #{f} in #{@holddir}. File ignored"
 			 end
 		 end
 
@@ -86,7 +86,7 @@ class CdbImportDir
 			 	if $!.message =~ /Permission problem/
 			 		raise
 			 	 else
-					log_error "'#{$!}' error while processing #{@dirname}/#{f}. Moving file to '#{@baddir}'"
+					log_error "'#{$!}' error while processing #{@dirname}/#{f}. Moving file to #{@baddir}"
 					FileUtils.move( File.join( @dirname, f ), File.join( @baddir, f ) )
 				 end
 			 end
@@ -107,20 +107,20 @@ class CdbImportDir
 		df.move( @baddir )
 		@newdata.delete(df.sortkey)
 		@baddata[df.srckey] = 1
-		log_error "Moved #{df} to '#@baddir'"
+		log_error "Moved #{df} to #@baddir"
 	end
 
 	def move_to_hold(df)
 		df.move( @holddir )
 		@newdata.delete(df.sortkey)
 		@baddata[df.srckey] = 1
-		log_warn "Moved #{df} to '#@holddir'"
+		log_warn "Moved #{df} to #@holddir"
 	end
 
 	def move_to_save(df)
 		df.move( @savedir )
 		@newdata.delete(df.sortkey)
-		log_info "Moved #{df} to '#@savedir'"
+		log_info "Moved #{df} to #@savedir"
 	end
 
 	def each
@@ -249,26 +249,38 @@ class CdbImportDB
 		# Set up logging for this instance
 		@log = logger.class == Logger ? logger : Logger.new(STDOUT)
 
-		@db = Mysql.new( host, user, pswd, db  )
+		@db = Mysql.new( host, user, pswd, db, nil, nil, Mysql::CLIENT_MULTI_RESULTS )
+		
 		log_debug "Connected to database #{db} on #{host}"		
 
-		@db.query( "create temporary table tempds like template_ds" )
-		@db.query( "create temporary table tempdt like template_dt" )
-		log_debug "Created temporary tables, tempds & tempdt"		
-		
+		db_query( "create temporary table tempds like template_ds" )
+		db_query( "create temporary table tempdt like template_dt" )
+
 	end
 
 	def import_data(df)
 
-		@db.query( "truncate table tempds" )
-		@db.query( "load data infile '#{df.metafull}' into table tempds" )
+		# Import dataset details into a temp table
+		db_query( "truncate table tempds" )
+		db_query( "load data infile '#{df.metafull}' into table tempds" )
 		log_info "Imported #{@db.affected_rows} rows from #{df.metafile} into tempds"
-		log_info "call cdb_check_datasets( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
 
-		@db.query( "truncate table tempdt" )
-		@db.query( "load data infile '#{df.datafull}' into table tempdt" )
+		# Call procedure to check (and create) datasets
+		log_debug "SQL: call cdb_check_datasets( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
+		@db.query("call cdb_check_datasets( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )") { |rs|
+			log_info(rs.fetch_row[0]) if rs.num_rows > 0
+			}
+
+		# Import data into a temp table
+		db_query( "truncate table tempdt" )
+		db_query( "load data infile '#{df.datafull}' into table tempdt" )
 		log_info "Imported #{@db.affected_rows} rows from #{df.datafile} into tempdt"
-		log_info "call cdb_import_data( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
+
+		# Call procedure to store new data into the customer specific table
+		log_debug "SQL: call cdb_import_data( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
+		@db.query("call cdb_import_data( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )") { |rs|
+			log_info(rs.fetch_row[0]) if rs.num_rows > 0
+			}
 	
 	end
 
@@ -278,11 +290,17 @@ class CdbImportDB
 	end	
 
 	def closedown
-		@db.query( "drop temporary table tempds" )
-		@db.query( "drop temporary table tempdt" )
-		log_debug "Dropped temporary tables, tempds & tempdt"		
+		db_query( "drop temporary table tempds" )
+		db_query( "drop temporary table tempdt" )
 		@db.close
 	end
+
+ private
+ 
+  def db_query(sql)
+		log_debug("SQL: #{sql}")
+		@db.query(sql)
+  end
 
 end
 
