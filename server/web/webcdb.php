@@ -1,7 +1,7 @@
 <?php
 # webcdb.php - script display capacity data
 
-require_once "webcdb_pdo.php";
+require_once "cdb_test_pdo.php";
 
 $title = "Imerja Web Charts";
 html_begin ($title, $title);
