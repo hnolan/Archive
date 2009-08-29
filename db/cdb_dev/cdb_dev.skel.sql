@@ -28,7 +28,7 @@ CREATE TABLE `cdb_log` (
   `pn` varchar(80) default NULL,
   `txt` varchar(1024) default NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=353 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=367 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -85,6 +85,26 @@ CREATE TABLE `dt30_daily_data` (
   `sample_month` int(10) unsigned NOT NULL,
   `sample_year` int(10) unsigned NOT NULL,
   PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`,`cdb_shift_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `hourly_data_cwnt`
+--
+
+DROP TABLE IF EXISTS `hourly_data_cwnt`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `hourly_data_cwnt` (
+  `sample_time` datetime NOT NULL,
+  `cdb_dataset_id` int(10) unsigned NOT NULL,
+  `sample_date` datetime NOT NULL,
+  `sample_hour` int(10) unsigned NOT NULL,
+  `data_min` float NOT NULL,
+  `data_max` float NOT NULL,
+  `data_sum` float NOT NULL,
+  `data_count` int(10) unsigned NOT NULL,
+  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -285,7 +305,7 @@ CREATE TABLE `m06_datasources` (
   PRIMARY KEY  (`id`),
   KEY `FK_datasource_customer` USING BTREE (`cdb_customer_id`),
   CONSTRAINT `FK_datasource_customer` FOREIGN KEY (`cdb_customer_id`) REFERENCES `m00_customers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -413,12 +433,22 @@ declare pn varchar(50) default 'cdb_check_datasets';
 declare rc integer default 0;
 declare dsrcid integer default 0;
 
--- Check that a unique datasource exists
+-- Check whether a unique datasource exists
 select count(*) from m06_datasources ds
  join m00_customers c on c.id = ds.cdb_customer_id
  where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
  into rc;
 
+-- Create datasource if one was not found
+if rc = 0 then
+  call cdb_create_datasource( p_prefix, p_srcsrv, p_srcapp );
+  select count(*) from m06_datasources ds
+   join m00_customers c on c.id = ds.cdb_customer_id
+   where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
+   into rc;
+ end if;
+
+-- Double check for valid datasource
 if rc = 1 then
   select ds.id from m06_datasources ds
    join m00_customers c on c.id = ds.cdb_customer_id
@@ -432,8 +462,8 @@ if rc = 1 then
 
 -- Check for unmapped datasets
 select count(*) from tempds tds
- where cdc_dataset_id not in ( 
-   select cdc_dataset_id from m07_dataset_map where cdb_datasource_id = dsrcid 
+ where cdc_dataset_id not in (
+   select cdc_dataset_id from m07_dataset_map where cdb_datasource_id = dsrcid
    )
  into rc;
 
@@ -650,6 +680,65 @@ END main;
 
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `cdb_create_datasource` */;;
+/*!50003 SET SESSION SQL_MODE=""*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `cdb_create_datasource`(
+        p_prefix varchar(10),
+        p_srcsrv varchar(50),
+        p_srcapp varchar(50)
+        )
+BEGIN
+
+-- Additional block to allow early exit from sproc
+main: BEGIN
+
+-- Declare variables and cursors
+declare pn varchar(50) default 'cdb_add_datasource';
+declare rc integer default 0;
+declare dsrcid integer default 0;
+declare tabnam varchar(50);
+declare pfxid int;
+
+call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp, ' )' ) );
+
+-- Check for prefix
+select count(*) from m00_customers where prefix = p_prefix into rc;
+
+if rc = 1 then
+  select id from m00_customers where prefix = p_prefix into pfxid;
+ else
+  call cdb_logit( pn, concat( 'Exit. *** Error - customer not found ***' ) );
+  leave main;
+ end if;
+
+-- Check whether the datasource already exists
+select count(*) from m06_datasources ds join m00_customers c on c.id = ds.cdb_customer_id
+ where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
+ into rc;
+
+if rc >= 1 then
+  call cdb_logit( pn, concat( 'Exit. *** Error - datasource already exists ***' ) );
+  leave main;
+ end if;
+
+-- Check for data table
+set tabnam = concat( 'hourly_data_', lower(p_prefix) );
+set @sql = concat( 'create table if not exists ', tabnam, ' like dt20_hourly_data;' );
+prepare nt from @sql;
+execute nt;
+
+-- Create new datasource
+set @sql = concat( 'insert into m06_datasources ( cdb_customer_id, source_server, source_app, hourly_table ) ' );
+set @sql = concat( @sql, ' values ( ', pfxid, ', ''', p_srcsrv, ''', ''', p_srcapp, ''', ''', tabnam, ''' );' );
+prepare nd from @sql;
+execute nd;
+
+call cdb_logit( pn, concat( 'Exit - created datasource for table ', tabnam, ' ' ) );
+
+END main;
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `cdb_import_data` */;;
 /*!50003 SET SESSION SQL_MODE=""*/;;
 /*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `cdb_import_data`(
@@ -747,33 +836,6 @@ select concat( 'cdb_import_data: Inserted ', rc, ' data rows into ', hourtab  ) 
 
 -- End of main block
 END;
-
-END */;;
-/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
-/*!50003 DROP PROCEDURE IF EXISTS `cdb_import_test` */;;
-/*!50003 SET SESSION SQL_MODE=""*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `cdb_import_test`(
-        p_prefix varchar(10),
-        p_srcsrv varchar(45),
-        p_srcapp varchar(45)
-        )
-BEGIN
-
-declare hourtab varchar(50) default 'hourly_data_sthc';
-
--- update latest times in m05_datasets
-set @sql = concat( 'update m05_datasets ds join ( ' );
-set @sql = concat( @sql, '  select cdb_dataset_id, max(sample_time) as ''latest'' from ', hourtab, ' group by cdb_dataset_id ' );
-set @sql = concat( @sql, '   ) as t on ds.id = t.cdb_dataset_id set ds.dt20_latest=t.latest; ' );
-
-prepare upd from @sql;
-execute upd;
-
-if p_prefix = 'RS' then
-  select * from m06_datasources;
- end if;
-
-select * from m06_datasources;
 
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
@@ -1239,7 +1301,7 @@ CREATE TABLE `m06_datasources` (
   PRIMARY KEY  (`id`),
   KEY `FK_datasource_customer` USING BTREE (`cdb_customer_id`),
   CONSTRAINT `FK_datasource_customer` FOREIGN KEY (`cdb_customer_id`) REFERENCES `m00_customers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1248,7 +1310,7 @@ CREATE TABLE `m06_datasources` (
 
 LOCK TABLES `m06_datasources` WRITE;
 /*!40000 ALTER TABLE `m06_datasources` DISABLE KEYS */;
-INSERT INTO `m06_datasources` VALUES (1,108,'lancsman','rtg','hourly_data_lahc'),(2,108,'lancsman','rtg2','hourly_data_lahc'),(3,93,'sthman3','rtg','hourly_data_sthc'),(4,105,'vaultexman2','rtg','hourly_data_vltx');
+INSERT INTO `m06_datasources` VALUES (1,108,'lancsman','rtg','hourly_data_lahc'),(2,108,'lancsman','rtg2','hourly_data_lahc'),(3,93,'sthman3','rtg','hourly_data_sthc'),(4,105,'vaultexman2','rtg','hourly_data_vltx'),(5,65,'chelseaman2','rtg','hourly_data_cwnt');
 /*!40000 ALTER TABLE `m06_datasources` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
