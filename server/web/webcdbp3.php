@@ -1,7 +1,7 @@
 <?php
 // webcdbp3.php - script display capacity data
 
-require_once "cdb_dev_pdo.php";
+require_once "webcdb_lib.php";
 
 $title = "Imerja - Web Charts";
 html_begin ($title, "");
@@ -98,11 +98,13 @@ $aCats = array();
 
 try {
 
-	// Connect to database
-	$msi = new mysqli('localhost', 'cdbweb', 'antipode', 'cdb_dev' );
-	if (mysqli_connect_error()) {
-    throw new Exception('Connect Error (' . mysqli_connect_errno() . ') ' . mysqli_connect_error());
-		}
+	$msi = webcdb_connect('dev','mysqli');
+
+//	// Connect to database
+//	$msi = new mysqli('localhost', 'cdbweb', 'antipode', 'cdb_dev' );
+//	if (mysqli_connect_error()) {
+//    throw new Exception('Connect Error (' . mysqli_connect_errno() . ') ' . mysqli_connect_error());
+//		}
 
 	$stmt = "call web_get_chart_data( '$sPrefix', '$sSelType', " .
 					"'$sSelection', '$sStartDate', '$sEndDate', $iPeriod )";

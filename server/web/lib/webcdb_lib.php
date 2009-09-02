@@ -1,6 +1,6 @@
 <?php
 //-------------------------------------------------
-// webcdb_pdo.php - common functions for cdb PDO-based PHP scripts
+// webcdb_lib.php - common functions for cdb PDO-based PHP scripts
 //
 // This file can be found at:
 //		/usr/local/apache/lib/php/webcdb_pdo.php
@@ -11,12 +11,35 @@
 # exceptions for errors that occur for subsequent PDO calls.
 # Return value is the database handle produced by new PDO().
 #-------------------------------------------------
-function webcdb_connect ()
+function webcdb_connect( $dbenv, $dbapi )
 {
-  $dbh = new PDO("mysql:host=localhost;dbname=ext_cdb",
-                 "cdbweb", "antipode");
-  $dbh->setAttribute (PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-  return ($dbh);
+	$dbh = NULL;
+
+	if ( $dbenv == 'dev' ) {
+		$dbname = 'cdb_dev';
+		}
+	 elseif ( $dbenv == 'test' ) {
+		$dbname = 'cdb_test';
+		}
+	 else {
+	 	return NULL;
+	 	}
+
+	if ( $dbapi == 'pdo' ) {
+	  $dbh = new PDO( "mysql:host=localhost;dbname=$dbname", "cdbweb", "antipode" );
+	  $dbh->setAttribute (PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+		}
+	 elseif ( $dbapi == 'mysqli' ) {
+		$dbh = new mysqli('localhost', 'cdbweb', 'antipode', $dbname );
+		if (mysqli_connect_error()) {
+	    throw new Exception('Connect Error (' . mysqli_connect_errno() . ') ' . mysqli_connect_error());
+			}
+		}
+	 else {
+	 	return NULL;
+	 	}
+
+  return($dbh);
 }
 
 # Put out initial HTML tags for page.  $title and $header, if
