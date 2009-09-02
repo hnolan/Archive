@@ -2,11 +2,12 @@
 // webcdb.php - script display capacity data
 
 require_once "webcdb_lib.php";
+require "./webcdb.env.php";
 
-$title = "Imerja Web Charts";
+$title = "Imerja Web Charts ($webcdb_db_env)";
 html_begin ($title, $title);
 
-$dbh = webcdb_connect('dev','pdo');
+$dbh = webcdb_connect($webcdb_db_env,'pdo');
 
 //---------------------------------------
 //	Print the combo box for selecting the customer

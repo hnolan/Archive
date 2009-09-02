@@ -2,8 +2,9 @@
 // webcdbp2.php - script display capacity data
 
 require_once "webcdb_lib.php";
+require "./webcdb.env.php";
 
-$title = "Imerja Web Charts (p2)";
+$title = "Imerja Web Charts (p2 - $webcdb_db_env)";
 html_begin ($title, $title);
 
 // Collect form parameters
@@ -19,7 +20,7 @@ print("-->\n");
 
 
 // Connect to DB
-$dbh = webcdb_connect('dev','pdo');
+$dbh = webcdb_connect($webcdb_db_env,'pdo');
 
 //---------------------------------------
 //	Print VBscript Arrays for machine/counter combo box

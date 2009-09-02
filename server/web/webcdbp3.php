@@ -2,8 +2,9 @@
 // webcdbp3.php - script display capacity data
 
 require_once "webcdb_lib.php";
+require "./webcdb.env.php";
 
-$title = "Imerja - Web Charts";
+$title = "Imerja - Web Charts ($webcdb_db_env)";
 html_begin ($title, "");
 
 //----------------------------------
@@ -98,7 +99,7 @@ $aCats = array();
 
 try {
 
-	$msi = webcdb_connect('dev','mysqli');
+	$msi = webcdb_connect($webcdb_db_env,'mysqli');
 
 //	// Connect to database
 //	$msi = new mysqli('localhost', 'cdbweb', 'antipode', 'cdb_dev' );
