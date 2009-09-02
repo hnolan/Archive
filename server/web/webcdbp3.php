@@ -92,44 +92,57 @@ print("sTitle        : $sTitle\n");
 //-------------------------------
 
 $nodata = false;
+$errmsg = "";
 $aData = array();
 $aCats = array();
 
 try {
-	$dbh = webcdb_connect ();
-	
-	$stmt = "call web_pivot_data( '$sSysType', '$sSelType', " .
-				"'$sSelection', '$sStartDate', '$sEndDate', $iPeriod )";
-	
-	print("stmt          : $stmt\n");
-	print("-->\n");
-	
-	$sth = $dbh->query ($stmt);
-	
-	// Read the returned dataset into a datastructure
-	// Returned data columns are expected to be:
-	//
-	//	Selection, Series, Data_Type, Sample_Time, Value
-	//
-	$aData = array();
-	while ($row = $sth->fetch (PDO::FETCH_NUM))	{
-		$aData[$row[0]][$row[1]][$row[2]][$row[3]] = $row[4];
-		$aCats[$row[3]] = 1;
+
+	// Connect to database
+	$msi = new mysqli('localhost', 'cdbweb', 'antipode', 'cdb_dev' );
+	if (mysqli_connect_error()) {
+    throw new Exception('Connect Error (' . mysqli_connect_errno() . ') ' . mysqli_connect_error());
 		}
-	}
-	catch	(Exception $e) {
-		$em = $e->getMessage();
-		$ec = substr($em,strlen($em)-5,4);
-		if ( $ec == 2053 )	// CR_NO_RESULT_SET
+
+	$stmt = "call web_get_chart_data( '$sPrefix', '$sSelType', " .
+					"'$sSelection', '$sStartDate', '$sEndDate', $iPeriod )";
+	
+	print("SQL          : $stmt\n");
+
+	// Perform SQL query
+	if ( $rs = $msi->query($stmt) ) {
+
+		if ( $rs->num_rows <= 0 ) {
 			$nodata = true;
-		 else
-			print "Caught unexpected exception: " . $e->getMessage() . "\n";
+			$errmsg = "No data found for supplied selection criteria";
+			}
+		 else {
+
+			print "Found: " . $rs->num_rows . " rows\n";
+
+			// Read the returned dataset into a datastructure
+			// Data columns are expected to be:
+			//		Selection, Series, Data_Type, Sample_Time, Value
+			//
+			while ( $row = $rs->fetch_row() )	{
+				$aData[$row[0]][$row[1]][$row[2]][$row[3]] = $row[4];
+				$aCats[$row[3]] = 1;
+				}
+		 	}
+	
+		// Free resultset 
+		$rs->close();
 		}
 
-$sth = NULL;
-$dbh = NULL;  // close connection
+	// Close DB connection
+	$msi->close();
+	}
+ catch	(Exception $e) {
+	$nodata = true;
+	$errmsg = $e->getMessage();
+	}
 
-// printtab($dbh,$stmt);
+print("-->\n");
 
 if ( $nodata == false ) {
 
@@ -363,7 +376,9 @@ if ( $nodata == false ) {
 ?>
 <p></p>
 <div class="errMsg">
-<p>No Data Found for this selection and period</p>
+<?php
+print "<p>$errmsg</p>\n";
+?>
 </div>
 <p>&nbsp;</p>
 <?php

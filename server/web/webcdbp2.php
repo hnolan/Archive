@@ -1,62 +1,78 @@
 <?php
-# webcdbp2.php - script display capacity data
+// webcdbp2.php - script display capacity data
 
 require_once "cdb_dev_pdo.php";
 
 $title = "Imerja Web Charts (p2)";
 html_begin ($title, $title);
 
-# Collect form parameters
-$prefix = script_param("cmbSystemType");
+// Collect form parameters
+$prefix = script_param("cmbPrefix");
 $systyp = script_param("cmbSystemType");
 $cust = script_param("txtCustomer");
 
-# Connect to DB
+print("<!--\n");
+print("cmbPrefix     : $prefix\n");
+print("cmbSystemType : $systyp\n");
+print("txtCustomer   : $cust\n");
+print("-->\n");
+
+
+// Connect to DB
 $dbh = webcdb_connect ();
 
-#---------------------------------------
-#	Print VBscript Arrays for machine/counter combo box
-#---------------------------------------
-function print_arrays($dbh,$systyp)
+//---------------------------------------
+//	Print VBscript Arrays for machine/counter combo box
+//---------------------------------------
+function print_arrays($dbh,$prefix)
 {
 
-	# Array declarations
+	// Array declarations
 	print("Dim arrM, arrC\n");
 
-	$stmt = "call web_get_machine_counter('$systyp','Machine')";
-	$sth = $dbh->query ($stmt);
+	// Get a list of machines for this customer prefix
+	$sql  = "select distinct name from m01_machines m ";
+	$sql .= " inner join m00_customers c on c.id = m.cdb_customer_id ";
+	$sql .= " where prefix = '$prefix'";
+
+	$sth = $dbh->query($sql);
 	
-	# Machines array
+	// Machines array
 	print("arrM = Array("); $sep = "";
 	while ($row = $sth->fetch (PDO::FETCH_NUM)) {
 		print("$sep \"$row[0]\""); $sep = ",";
 		}
 	print(" )\n");
 	
-	$sth = NULL;
+	$sth->closeCursor();
+	unset($sth);
 	
-	$stmt = "call web_get_machine_counter('$systyp','Counter')";
-	$sth = $dbh->query ($stmt);
+	// Get a list of counters for this customer prefix
+	$sql  = "select distinct counter from dataset_details ";
+	$sql .= " where prefix = '$prefix'";
+
+	$sth = $dbh->query($sql);
 	
-	# Counters array
+	// Counters array
 	print("arrC = Array("); $sep = "";
 	while ($row = $sth->fetch (PDO::FETCH_NUM)) {
 		print("$sep \"$row[0]\""); $sep = ",";
 		}
 	print(" )\n");
 	
-	$sth = NULL;
+	$sth->closeCursor();
+	unset($sth);
 	
 }
 
-#---------------------------------------
-#	Print the combo boxes for selecting the date
-#---------------------------------------
+//---------------------------------------
+//	Print the combo boxes for selecting the date
+//---------------------------------------
 function print_date_combo($nam,$daysago)
 {
 	$dat = getdate( time() - ($daysago * 86400) );
 	
-	# Days
+	// Days
 	print("<select size=\"1\" name=\"cmb" . $nam . "Day\">\n");
 	for ( $i=1; $i <= 31; $i++ ) {
 		$s = $dat["mday"] == $i ? "selected" : "";
@@ -64,7 +80,7 @@ function print_date_combo($nam,$daysago)
 		}
 	print("</select>\n");
 
-	# Months
+	// Months
 	print("<select size=\"1\" name=\"cmb" . $nam . "Month\">\n");
 	for ( $i=1; $i <= 12; $i++ ) {
 		$s = $dat["mon"] == $i ? "selected" : "";
@@ -72,7 +88,7 @@ function print_date_combo($nam,$daysago)
 		}
 	print("</select>\n");
 
-	# Years
+	// Years
 	print("<select size=\"1\" name=\"cmb" . $nam . "Year\">\n");
 	for ( $i=2008; $i <= 2009; $i++ ) {
 		$s = $dat["year"] == $i ? "selected" : "";
@@ -82,9 +98,9 @@ function print_date_combo($nam,$daysago)
 
 }
 
-#---------------------------------------
-#	Print the combo boxes for selecting the time
-#---------------------------------------
+//---------------------------------------
+//	Print the combo boxes for selecting the time
+//---------------------------------------
 function print_time_combo($nam)
 {
 	print("<select size=\"1\" name=\"cmb" . $nam . "Hour\">\n");
@@ -161,8 +177,8 @@ Data for <?php print($systyp); ?> systems from <?php print($cust); ?>
 		<select size="1" name="cmbPeriod">
 			<option value="20" selected>Hourly</option>
 			<option value="21">HourOfDay</option>
-<!--
 			<option value="30">Daily</option>
+<!--
 			<option value="40">Weekly</option>
 			<option value="50">Monthly</option>
 -->
@@ -243,7 +259,7 @@ Data for <?php print($systyp); ?> systems from <?php print($cust); ?>
 <script language=vbs>
 <!--
 <?php
- print_arrays($dbh,$systyp);
+ print_arrays($dbh,$prefix);
 ?>
 -->
 </script>
@@ -251,6 +267,6 @@ Data for <?php print($systyp); ?> systems from <?php print($cust); ?>
 <script src="scripts/webcdbp2.vbs" language="vbs" ></script>
 
 <?php
-$dbh = NULL;  # close connection
+$dbh = NULL;  // close connection
 html_end ();
 ?>

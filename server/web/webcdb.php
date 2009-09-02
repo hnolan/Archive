@@ -1,58 +1,58 @@
 <?php
-# webcdb.php - script display capacity data
+// webcdb.php - script display capacity data
 
-require_once "cdb_test_pdo.php";
+require_once "cdb_dev_pdo.php";
 
 $title = "Imerja Web Charts";
 html_begin ($title, $title);
 
 $dbh = webcdb_connect ();
 
-#---------------------------------------
-#	Print the combo box for selecting the customer
-#---------------------------------------
+//---------------------------------------
+//	Print the combo box for selecting the customer
+//---------------------------------------
 function print_combo($dbh)
 {
-	$stmt = "call web_get_prefix_type('Prefix')";
-	$sth = $dbh->query ($stmt);
+	// Join on machine to only select customers with machines defined
+	$sql =  "select distinct c.prefix, c.fullname from m00_customers c ";
+	$sql .= " inner join m01_machines m on c.id = m.cdb_customer_id ";
+	$sql .= " order by c.fullname";
+
+	$sth = $dbh->query($sql);
 	
 	print ("<select size='1' name='cmbPrefix'>\n");
-	while ($row = $sth->fetch (PDO::FETCH_NUM))
-	{
+	while ($row = $sth->fetch (PDO::FETCH_NUM)) {
 		print ("\t<option value='$row[0]'>" . htmlspecialchars ($row[1]) . "</option>\n");
-	}
+		}
 	print ("</select>\n");
 	
-	$sth = NULL;
+	$sth->closeCursor();
 }
 
-#---------------------------------------
-#	Print the array for matching sites to customer
-#---------------------------------------
+//---------------------------------------
+//	Print the array for matching sites to customer
+//---------------------------------------
 function print_array($dbh)
 {
-	$stmt = "call web_get_prefix_type('')";
-	$sth = $dbh->query ($stmt);
+	// Join on machine to get machine_type
+	$sql =  "select distinct c.prefix, m.machine_type from m00_customers c ";
+	$sql .= " inner join m01_machines m on c.id = m.cdb_customer_id ";
+	$sql .= " order by c.prefix";
+
+	$sth = $dbh->query($sql);
 	
 	print ("Dim arrP, arrPST\narrPST = Array( _\n");
-	while ($row = $sth->fetch (PDO::FETCH_NUM))
-	{
+	while ($row = $sth->fetch (PDO::FETCH_NUM)) {
 		print ("\t\"$row[0]\", \"" . htmlspecialchars ($row[1]) . "\", _\n");
-	}
+		}
 	print ("\"0\",\"Dummy\" )\n");
 	
-	$sth = NULL;
+	$sth->closeCursor();
 }
 
-//$response = script_param ("response");
-//if (is_null ($response))   # invoked for first time
-//  present_question ($dbh);
-//else                      # user submitted response to form
-//  check_response ($dbh);
-
-#---------------------------------------
-#	Main HTML code of page starts here
-#---------------------------------------
+//---------------------------------------
+//	Main HTML code of page starts here
+//---------------------------------------
 
 ?>
 
@@ -117,6 +117,8 @@ function print_array($dbh)
 <script src="scripts/webcdb.vbs" language="vbs" ></script>
 
 <?php
-$dbh = NULL;  # close connection
+// close connection
+$dbh = NULL;
+
 html_end ();
 ?>
