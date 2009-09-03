@@ -273,7 +273,7 @@ class CdbImportDB
 
 		# Import data into a temp table
 		db_query( "truncate table tempdt" )
-		db_query( "load data infile '#{df.datafull}' into table tempdt" )
+		db_query( "load data infile '#{df.datafull}' into table tempdt ( sample_date, sample_hour, cdc_dataset_id, data_min, data_max, data_sum, data_count )" )
 		log_info "Imported #{@db.affected_rows} rows from #{df.datafile} into tempdt"
 
 		# Call procedure to store new data into the customer specific table

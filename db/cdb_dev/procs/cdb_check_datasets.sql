@@ -30,12 +30,22 @@ declare pn varchar(50) default 'cdb_check_datasets';
 declare rc integer default 0;
 declare dsrcid integer default 0;
 
--- Check that a unique datasource exists
+-- Check whether a unique datasource exists
 select count(*) from m06_datasources ds
  join m00_customers c on c.id = ds.cdb_customer_id
  where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
  into rc;
 
+-- Create datasource if one was not found
+if rc = 0 then
+  call cdb_create_datasource( p_prefix, p_srcsrv, p_srcapp );
+  select count(*) from m06_datasources ds
+   join m00_customers c on c.id = ds.cdb_customer_id
+   where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
+   into rc;
+ end if;
+
+-- Double check for valid datasource
 if rc = 1 then
   select ds.id from m06_datasources ds
    join m00_customers c on c.id = ds.cdb_customer_id
@@ -49,8 +59,8 @@ if rc = 1 then
 
 -- Check for unmapped datasets
 select count(*) from tempds tds
- where cdc_dataset_id not in ( 
-   select cdc_dataset_id from m07_dataset_map where cdb_datasource_id = dsrcid 
+ where cdc_dataset_id not in (
+   select cdc_dataset_id from m07_dataset_map where cdb_datasource_id = dsrcid
    )
  into rc;
 

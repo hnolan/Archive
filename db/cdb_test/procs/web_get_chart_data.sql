@@ -1,6 +1,6 @@
 DELIMITER $$
 
-DROP PROCEDURE IF EXISTS `cdb_dev`.`web_get_chart_data` $$
+DROP PROCEDURE IF EXISTS `cdb_test`.`web_get_chart_data` $$
 CREATE DEFINER=`root`@`localhost` PROCEDURE `web_get_chart_data` (
  p_prefix varchar(50),
  p_seltype varchar(50),

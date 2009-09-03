@@ -28,7 +28,7 @@ CREATE TABLE `cdb_log` (
   `pn` varchar(80) default NULL,
   `txt` varchar(1024) default NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=367 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=398 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -181,7 +181,7 @@ CREATE TABLE `m00_customers` (
   `fullname` varchar(50) default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `IDX_prefix_unique` USING BTREE (`prefix`)
-) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=110 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -327,24 +327,6 @@ CREATE TABLE `m07_dataset_map` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `tempds`
---
-
-DROP TABLE IF EXISTS `tempds`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `tempds` (
-  `cdc_dataset_id` int(10) unsigned NOT NULL,
-  `cdc_machine` varchar(45) NOT NULL,
-  `cdc_object` varchar(45) NOT NULL,
-  `cdc_instance` varchar(45) NOT NULL,
-  `cdc_counter` varchar(45) NOT NULL,
-  `speed` bigint(20) unsigned NOT NULL,
-  `description` varchar(250) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
 -- Table structure for table `tempdt`
 --
 
@@ -358,7 +340,9 @@ CREATE TABLE `tempdt` (
   `data_min` float NOT NULL,
   `data_max` float NOT NULL,
   `data_sum` float NOT NULL,
-  `data_count` int(10) unsigned NOT NULL
+  `data_count` int(10) unsigned NOT NULL,
+  `sample_time` datetime default NULL,
+  `cdb_dataset_id` int(10) unsigned NOT NULL default '0'
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -394,7 +378,9 @@ CREATE TABLE `template_dt` (
   `data_min` float NOT NULL,
   `data_max` float NOT NULL,
   `data_sum` float NOT NULL,
-  `data_count` int(10) unsigned NOT NULL
+  `data_count` int(10) unsigned NOT NULL,
+  `sample_time` datetime default NULL,
+  `cdb_dataset_id` int(10) unsigned NOT NULL default '0'
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -772,6 +758,8 @@ declare pn varchar(50) default 'cdb_import_data';
 declare rc integer default 0;
 declare dsrcid integer default 0;
 declare hourtab varchar(50) default 'dt20_hourly_data';
+declare sd date;
+declare ed date;
 
 -- log entry
 call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp, ' )' ) );
@@ -796,21 +784,40 @@ if rc = 1 then
   leave main;
  end if;
 
+-- Populate new columns
+update tempdt dt join m07_dataset_map dm
+ on dt.cdc_dataset_id = dm.cdc_dataset_id and dm.cdb_datasource_id = dsrcid
+  set dt.cdb_dataset_id = dm.cdb_dataset_id,
+      dt.sample_time = date_add(dt.sample_date, interval dt.sample_hour hour );
+
+-- Delete duplicate data or unknown datasets
+delete from tempdt where cdb_dataset_id = 0;
+
+set @sql = concat( 'delete from tempdt dt using tempdt dt join ', hourtab, ' ht ' );
+set @sql = concat( @sql, '  on dt.cdb_dataset_id = ht.cdb_dataset_id and ht.sample_time = dt.sample_time' );
+
+prepare deldup from @sql;
+execute deldup;
+
+set rc = row_count();
+if rc > 0 then
+  call cdb_logit( pn, concat( 'Discarded ', rc, ' duplicate rows' ) );
+ end if;
+
+-- Get bounds for date range to limit search of existing table data
+select min(sample_date), max(date_add( sample_date, interval 1 day )) from tempdt into sd, ed;
+
 -- ---------------------------
 -- Import data
 -- ---------------------------
 
 -- Insert new mapped data
 set @sql = concat( 'insert into ', hourtab, ' ' );
-set @sql = concat( @sql, ' select date_add(dt.sample_date, interval dt.sample_hour hour ), dm.cdb_dataset_id, ' );
-set @sql = concat( @sql, '   dt.sample_date, dt.sample_hour, data_min, data_max, data_sum, data_count ' );
-set @sql = concat( @sql, '  from tempdt dt join m07_dataset_map dm ' );
-set @sql = concat( @sql, '   on dt.cdc_dataset_id = dm.cdc_dataset_id where dm.cdb_datasource_id = ', dsrcid, ' ' );
-set @sql = concat( @sql, ' and not exists ( select * from ', hourtab, ' ht ' );
-set @sql = concat( @sql, '  where ht.sample_time = date_add(dt.sample_date, interval dt.sample_hour hour ) and ht.cdb_dataset_id = dm.cdb_dataset_id )' );
+set @sql = concat( @sql, ' select sample_time, cdb_dataset_id, sample_date, sample_hour, ' );
+set @sql = concat( @sql, '   data_min, data_max, data_sum, data_count from tempdt' );
 
-prepare imp from @sql;
-execute imp;
+prepare insnew from @sql;
+execute insnew;
 
 set rc = row_count();
 
@@ -823,7 +830,8 @@ if rc = 0 then
 
 -- update latest times in m05_datasets
 set @sql = concat( 'update m05_datasets ds join ( ' );
-set @sql = concat( @sql, '  select cdb_dataset_id, max(sample_time) as ''latest'' from ', hourtab, ' group by cdb_dataset_id ' );
+set @sql = concat( @sql, '  select cdb_dataset_id, max(sample_time) as ''latest'' from ', hourtab, ' ' );
+set @sql = concat( @sql, '   where sample_time between ''', sd, ''' and ''', ed, ''' group by cdb_dataset_id ' );
 set @sql = concat( @sql, '   ) as t on ds.id = t.cdb_dataset_id set ds.dt20_latest=t.latest; ' );
 
 prepare upd from @sql;
@@ -1113,7 +1121,7 @@ if p_period = 21 then
    where sample_time >= sd and sample_time < ed;
  end if;
 
--- select * from TempData;
+-- select * from TempData limit 10;
 
 -- *************** Data Processing portion ***************
 
@@ -1144,14 +1152,6 @@ insert into TempSeries ( sample_time, data_type, data_val, selection, series )
 drop table TempDatasets;
 drop table TempData;
 
-select count(*) from TempSeries into @rc;
-
--- Exit here if no data was found
-if @rc <= 0 then
-  drop table TempSeries;
-  leave main;
- end if;
-
 select selection, series, data_type, sample_time, data_val from TempSeries
  order by selection, series, data_type, sample_time;
 
@@ -1159,65 +1159,6 @@ drop table TempSeries;
 
 END main;
 
-END */;;
-/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
-/*!50003 DROP PROCEDURE IF EXISTS `web_get_machine_counter` */;;
-/*!50003 SET SESSION SQL_MODE=""*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `web_get_machine_counter`(
-        p_prefix varchar(50),
-        mc varchar(50)
-        )
-BEGIN
-
-if mc = 'Machine' then
-  select distinct name from m01_machines m
-   inner join m00_customers c on c.id = m.cdb_customer_id
-   where prefix = p_prefix;
- else
-  if mc = 'Counter' then
-    select distinct counter from dataset_details
-     where prefix = p_prefix;
-   else
-    select distinct machine, counter from dataset_details
-     where prefix = p_prefix;
-   end if;
- end if;
-
-END */;;
-/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
-/*!50003 DROP PROCEDURE IF EXISTS `web_get_prefix_type` */;;
-/*!50003 SET SESSION SQL_MODE=""*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `web_get_prefix_type`(p1 varchar(50))
-BEGIN
-
-if p1 = 'Prefix' then
-  -- Join on machine to only select customers with machines defined
-  select distinct c.prefix, c.fullname from m00_customers c
-   inner join m01_machines m on c.id = m.cdb_customer_id
-   order by c.fullname;
- else
-  select distinct c.prefix, m.machine_type from m00_customers c
-   inner join m01_machines m on c.id = m.cdb_customer_id
-   order by c.prefix;
- end if;
-
-
-END */;;
-/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
-/*!50003 DROP PROCEDURE IF EXISTS `xx` */;;
-/*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `xx`()
-BEGIN
-truncate table dt30_daily_data;
-truncate table dt20_hourly_data;
-truncate table m07_dataset_map;
-truncate table m06_datasources;
-truncate table m05_datasets;
-truncate table m04_counters;
-truncate table m03_instances;
-truncate table m02_objects;
-truncate table m01_machines;
-truncate table cdb_log;
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 DELIMITER ;
@@ -1272,7 +1213,7 @@ CREATE TABLE `m00_customers` (
   `fullname` varchar(50) default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `IDX_prefix_unique` USING BTREE (`prefix`)
-) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=110 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
