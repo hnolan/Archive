@@ -8,6 +8,7 @@ DUMPFIL=${CWD}/db/${DB}/${DB}.skel.sql
 
 mysqldump -p$PWD -u root ${DB} --no-data --routines --skip-dump-date >$DUMPFIL
 mysqldump -p$PWD -u root ${DB} m00_customers m06_datasources --skip-dump-date >>$DUMPFIL
+dos2unix $DUMPFIL
 
 # ---------------------------------------------------
 
@@ -16,6 +17,7 @@ DUMPFIL=${CWD}/db/${DB}/${DB}.skel.sql
 
 mysqldump -p$PWD -u root ${DB} --no-data --routines --skip-dump-date >$DUMPFIL
 mysqldump -p$PWD -u root ${DB} m00_customers m06_datasources --skip-dump-date >>$DUMPFIL
+dos2unix $DUMPFIL
 
 # ---------------------------------------------------
 
@@ -31,3 +33,4 @@ DB=cdb_utils
 DUMPFIL=${CWD}/db/${DB}/${DB}.skel.sql
 
 mysqldump -p$PWD -u root $DB --no-data --routines --skip-dump-date >$DUMPFIL
+dos2unix $DUMPFIL
