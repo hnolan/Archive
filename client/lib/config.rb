@@ -1,8 +1,11 @@
 CONFIG = {
-# :logfile => 'cdb_import_files.log',
- :prefix => 'STHC',
- :sysname => 'sthman3',
- :logfile => STDOUT,
- :archivedir => 'E:/Dev/TestData/NagLogs/Test',
- :maxlogs => 2
- }
+	:prefix => 'IMJA',
+	:sysname => 'dev01',
+	:nag_export_events => {
+		:logname => '~/logs/nag_export_events.log',
+#		:archivedir => '/usr/local/nagios/var/archives',
+		:archivedir => '~/tmp',
+		:eventdir => '~/export/events',
+		:maxlogs => 15
+		}
+	}

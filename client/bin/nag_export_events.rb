@@ -13,8 +13,7 @@
 #=====================================================================
 
 # Add lib directory to load path
-$LOAD_PATH.unshift File.join(File.dirname(__FILE__),'/lib')
-puts $LOAD_PATH
+$LOAD_PATH.unshift File.join(File.dirname(__FILE__),'/../lib')
 
 require "nagarch"
 require 'nagevent'
@@ -25,7 +24,19 @@ require "config"
 
 progname = "Export Events"
 
-logger = Logger.new(CONFIG[:logfile])
+# Read config
+#
+prefix  = CONFIG[:prefix]
+sysname = CONFIG[:sysname]
+#
+conf = CONFIG[:nag_export_events]
+#
+logname  = File.expand_path(conf[:logname])
+archpath = File.expand_path(conf[:archivedir])
+destpath = File.expand_path(conf[:eventdir])
+maxlogs  = conf[:maxlogs] || 0
+	
+logger = Logger.new(logname,'monthly')
 
 logger.progname = progname
 # logger.level = Logger::INFO
@@ -34,38 +45,14 @@ logger.level = Logger::DEBUG
 logger.info ""	# Blank line to aid log readability
 logger.info "---- Entering #{progname} ----"
 
-# require "profile"
-
-# Read config
-#
-prefix = CONFIG[:prefix]
-sysname = CONFIG[:sysname]
-archdirname = CONFIG[:archivedir]
-maxlogs = CONFIG[:maxlogs] || 0
-	
-puts maxlogs
-
 # --------------------------------------------------------------------
 #	Main routine
 # --------------------------------------------------------------------
 
 # Check for destination directory
 #
-csvdir = File.join(archdirname,"events")
-unless File.directory?(csvdir)
-	logger.info "Creating #{csvdir}"
-	begin
-		FileUtils.mkdir csvdir 
-	 rescue
-		msg = "Failed to create CSV directory: #{$!}"
-		puts "** ERROR: #{msg}"
-		logger.error msg
-		logger.info "---- Leaving #{progname} (Aborted) ----"
-	  exit
-	 end
- end
-unless File.writable?(csvdir)
-	msg = "Permission problem. Directory #{csvdir} is not writable"
+unless File.directory?(destpath) and File.writable?(destpath)
+	msg = "Permission problem. Directory #{destpath} is not writable"
 	puts "** ERROR: #{msg}"
 	logger.error msg
 	logger.info "---- Leaving #{progname} (Aborted) ----"
@@ -76,14 +63,14 @@ unless File.writable?(csvdir)
 #
 csvtime = Time.new.strftime("%Y%m%d.%H%M%S") 
 csvfile = "#{prefix}.#{sysname}.nagevent.#{csvtime}.csv"
-csvfull = File.join(csvdir,csvfile)
+csvfull = File.join(destpath,csvfile)
 
 #	Create the archive directory object 
 #
 begin
-	archdir = NagArchLogDir.new( archdirname, logger )
+	archdir = NagArchLogDir.new( archpath, logger )
  rescue
- 	msg = "Failed to scan archive directory: #{$!}"
+ 	msg = "Failed to scan archive directory '#{archpath}': #{$!}"
 	puts "** ERROR: #{msg}"
 	logger.error msg
 	logger.info "---- Leaving #{progname} (Aborted) ----"
@@ -93,7 +80,9 @@ begin
 # Leave early if there are no new files
 #
 if archdir.count == 0
-	logger.warn "No new logfiles found"
+	msg = "No new logfiles found"
+	puts msg
+	logger.warn msg
 	logger.info "---- Leaving #{progname} ----"
 	exit
  end
@@ -116,7 +105,9 @@ logno = 0
 archdir.each do |fn|
 	begin
 
-		logger.info "Processing: #{File.basename(fn)}" 
+		msg = "Processing: #{File.basename(fn)}" 
+		puts msg
+		logger.info msg
 		lf = NagLogFile.new(fn)
 
 		# Process each stateful log entry

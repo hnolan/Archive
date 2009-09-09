@@ -30,8 +30,8 @@ class NagArchLogDir
 		@log = logger.class == Logger ? logger : Logger.new(STDOUT)
 
 		# Validate parameter
-		raise "Import directory not found, #{d}" unless File.directory?(d)
 		@dirname = File.expand_path(d)
+		raise "Import directory not found, #{@dirname}" unless File.directory?(@dirname)
 
 		log_info "Archive directory, #@dirname"
 
