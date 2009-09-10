@@ -12,11 +12,22 @@
 #
 #=====================================================================
 
+# Add lib directory to load path
+$LOAD_PATH.unshift File.join(File.dirname(__FILE__),'/../lib')
+
 require "logger"
 require "cdbimport"
 require "config"
 
-logger = Logger.new(CONFIG[:logfile])
+# Read config
+#
+conf = CONFIG[:cdb_import_files]
+#
+logname = File.expand_path(conf[:logname])
+imppath = File.expand_path(conf[:importdir])
+db_info = conf[:db_info]
+
+logger = Logger.new(logname)
 
 # logger = Logger.new(STDOUT)
 logger.progname = "CDB Import"
@@ -27,7 +38,7 @@ logger.info ""	# Blank line to aid log readability
 logger.info "---- Entering CDB Import ----"
 
 begin
-	imp = CdbImportDir.new( CONFIG[:importdir], logger )
+	imp = CdbImportDir.new( imppath, logger )
  rescue
 	puts "** ERROR: Failed to scan import directory: #{$!}"
 	logger.error "Failed to scan import directory: #{$!}"
@@ -43,7 +54,7 @@ if imp.count == 0
  end
 
 begin
-	cdb = CdbImportDB.new( CONFIG[:db_info], logger ) 
+	cdb = CdbImportDB.new( db_info, logger ) 
  rescue
 	puts "** ERROR: Failed to connect to database: #{$!}"
 	logger.error "Failed to connect to database: #{$!}"

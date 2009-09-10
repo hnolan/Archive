@@ -1,14 +1,13 @@
 PWD=passport
-CWD=/home/huw/dev/cdb
 
-DUMPDIR=/home/huw/dev/mysql/procs
-DST=/home/huw/dev/cdb/db
+DUMPDIR=$HOME/tmp/mysql.procs
+DST=$HOME/dev/cdb/db
 
 # Clear the temporary holding directory
 rm -f $DUMPDIR/*.sql
 
 # Dump the procedure code and params
-mysql -p$PWD -u root -e "call cdb_utils.dump_code()"
+mysql -p$PWD -u root -e "call cdb_utils.dump_code('$DUMPDIR')"
 
 # Combine dumped fragments and store under parent DB
 cd $DUMPDIR
