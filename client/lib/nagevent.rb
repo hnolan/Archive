@@ -13,6 +13,7 @@ class NagEventStore
 
 		# Initialise stats
 		@statnewcalls = 0
+		@statcurrent = 0
 		@statnew = 0
 		@statfoundopen = 0
 		@statclosed = 0
@@ -47,6 +48,7 @@ class NagEventStore
 		puts " Found Events   : #@statfoundopen"
 		puts " Closed Events  : #@statclosed"
 		puts " New calls      : #@statnewcalls"
+		puts " Current Events : #@statcurrent"
 		puts " New Events     : #@statnew"
 		puts " Stored Events  : #{@events.size}"
 		puts " Open Events    : #{@openevents.keys.size}"
@@ -73,9 +75,19 @@ class NagEventStore
 	def new_event(le)
 		@statnewcalls += 1
 
-		# Create a new event only if log entry state is not OK
-		return if le.stateOK?
-
+		# If log entry state is OK, create an event only
+		# if it is a current host/service state entry
+		if le.stateOK?
+			if le.current_state?
+				# Open, then close, an Event in memory
+				ev = NagEvent.new(le)
+				ev.close(le)
+				@events << ev
+				@statcurrent += 1
+			 end
+			return 
+		 end
+			
 		# Create new Event in memory
 		@events << NagEvent.new(le)
 
@@ -94,6 +106,7 @@ class NagEventStore
 		@openevents.delete(le.svckey)
 		@statclosed += 1
 	end
+
 
 	# Check for existing open event
 	#
@@ -122,6 +135,7 @@ class NagEvent
 	 	raise "Unrecognised parameter class for NagEvent.new [#{le.class}]" unless le.class == NagLogEntry
 		@host, @service, @starttime, @state = le.host, le.service, le.ts, le.state
 		@hardsoft, @reason, @msg = le.hardsoft, le.entrytype, le.msg
+		@endtime = @duration = @nextstate = nil
 		@svckey = le.svckey
 	end
 
@@ -142,8 +156,8 @@ class NagEvent
 	
 	def csv
 		c = "#@host,#@service,#@state,#@hardsoft,"
-		c += "#{showtime(@starttime)},#{showtime(@endtime)},#@duration,"
-		c += "#@nextstate,#@reason,\"#@msg\""
+		c += "#{showtime(@starttime)},#{showtime(@endtime)},#{@duration.nil? ? 'NULL' : @duration},"
+		c += "#{@nextstate.nil? ? 'NULL' : @nextstate},#@reason,\"#@msg\""
 		c
 	end
 
@@ -152,7 +166,7 @@ class NagEvent
 	end
 	
 	def showtime(ts)
-		ts.class == Time ? ts.strftime("%Y/%m/%d %H:%M:%S") : ''
+		ts.class == Time ? ts.strftime("%Y/%m/%d %H:%M:%S") : 'NULL'
 	end
 	
 end	

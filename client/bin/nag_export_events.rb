@@ -31,7 +31,9 @@ sysname = CONFIG[:sysname]
 #
 conf = CONFIG[:nag_export_events]
 #
-logname  = File.expand_path(conf[:logname])
+logname  = conf[:logname]
+# Only expand Strings (allows an IO object to be specified, e.g. STDOUT)
+logname  = File.expand_path(logname) if logname.class == String
 archpath = File.expand_path(conf[:archivedir])
 destpath = File.expand_path(conf[:eventdir])
 maxlogs  = conf[:maxlogs] || 0
@@ -62,7 +64,7 @@ unless File.directory?(destpath) and File.writable?(destpath)
 # Build CSV filename
 #
 csvtime = Time.new.strftime("%Y%m%d.%H%M%S") 
-csvfile = "#{prefix}.#{sysname}.nagevent.#{csvtime}.csv"
+csvfile = "#{prefix}.#{sysname}.nagevt.#{csvtime}.data"
 csvfull = File.join(destpath,csvfile)
 
 #	Create the archive directory object 

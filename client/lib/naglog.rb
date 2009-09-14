@@ -12,7 +12,8 @@ class NagLogEntry
 
 		# Initialise instance variables
 		@uxtime = 0
-		@host, @service, @stateful = '', '', false
+		@host = @service = ''
+		@stateful = @current_state = false
 
 		if logline =~ /^\[(\d{10})\]\s+(\w[\w\s]+)\:\s+(.*)/
 			# Handle standard format entry
@@ -60,6 +61,10 @@ class NagLogEntry
 		@stateful
 	end
 
+	def current_state?
+		@current_state
+	end
+
 	def stateOK?
 		stateful? and ( @state == "OK" or @state == "UP" )
 	end
@@ -84,10 +89,10 @@ class NagLogEntry
 			( @host, @service, @rc, @msg ) = entryparams
 		 when "CURRENT SERVICE STATE"
 			( @host, @service, @state, @hardsoft, @attempt, @msg ) = entryparams
-			@stateful = true
+			@stateful = @current_state = true
 		 when "CURRENT HOST STATE"
 			( @host, @state, @hardsoft, @attempt, @msg ) = entryparams
-			@stateful = true
+			@stateful = @current_state = true
 		 when "HOST ALERT"
 			( @host, @state, @hardsoft, @attempt, @msg ) = entryparams
 			@stateful = true
