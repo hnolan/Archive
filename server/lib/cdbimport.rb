@@ -16,7 +16,7 @@ end
 
 #-------------------------------------------------
 # An import directory that holds a collection of
-#  CdbDatafile objects
+#  CdbDataFile objects
 class CdbImportDir
 
 	include MyLog
@@ -49,9 +49,9 @@ class CdbImportDir
 		#   files from this datasource exist )
 	
 		Dir.new(@baddir).entries.each do |f|
-			next unless f =~ /\.data$/			# Ignore any non *.data files
+			next unless CdbDataFile.valid_name?(f)
 			begin
-				df = CdbDatafile.new(@baddir,f)
+				df = CdbDataFile.new(@baddir,f)
 				@baddata[df.srckey] = 1				
 			 rescue 
 				# Ignore exceptions for baddir
@@ -62,9 +62,9 @@ class CdbImportDir
 		log_warn "Found bad files from #{bad_found} datasources" if bad_found > 0
 
 		Dir.new(@holddir).entries.each do |f|
-			next unless f =~ /\.data$/			# Ignore any non *.data files
+			next unless CdbDataFile.valid_name?(f)
 			begin
-				df = CdbDatafile.new(@holddir,f)
+				df = CdbDataFile.new(@holddir,f)
 				@baddata[df.srckey] = 1
 			 rescue 
 				log_error "'#{$!}' error while processing #{f} in #{@holddir}. File ignored"
@@ -77,9 +77,9 @@ class CdbImportDir
 		# Compile a list of new data files (look for *.data files)
 		# Scan import directory entries for new data files
 		Dir.new(@dirname).entries.each do |f|
-			next unless f =~ /\.data$/			# Ignore any non *.data files
+			next unless CdbDataFile.valid_name?(f)
 			begin
-				df = CdbDatafile.new(@dirname,f)
+				df = CdbDataFile.new(@dirname,f)
 				@newdata[df.sortkey] = df
 				move_to_hold(df) if @baddata.has_key?(df.srckey)
 			 rescue 
@@ -152,7 +152,7 @@ class CdbImportDir
 end
 
 #-------------------------------------------------
-class CdbDatafile
+class CdbDataFile
 
 # A pair of data xfer files
 # <PFX>.<srcsrv>.<srcapp>.<date>.<time>.meta
@@ -184,12 +184,17 @@ class CdbDatafile
 		@metafull = File.join( @datapath, @metafile )
 
 		# Check that *.meta file exists
-		raise "No meta file" unless FileTest.exist?(@metafull)
+		raise "No meta file" if has_meta? and not FileTest.exist?(@metafull)
 
 		# Check that we have the rights to move these files
-		raise "Permission problem. #@metafull is not writable" unless File.writable?(@metafull)
+		raise "Permission problem. #@metafull is not writable" if has_meta? and not File.writable?(@metafull)
 		raise "Permission problem. #@datafull is not writable" unless File.writable?(@datafull)
 		
+	end
+
+	# Detect filenames that seem valid
+	def self.valid_name?(f)
+		f =~ /^(\w+)\.(\w+)\.(\w+)\.(\d+\.\d+)\.data$/ or f =~ /^(\w+)\.(\w+)\.(\d+\.\d+)\.data$/
 	end
 
 	# Move the pair of files to a new directory
@@ -205,7 +210,7 @@ class CdbDatafile
 		
 		# Move the pair to new directory
 		begin
-			FileUtils.move( @metafull, metanew )
+			FileUtils.move( @metafull, metanew ) if has_meta?
 		 rescue
 			raise "Move failed for #{@metafull} to #{metanew}: $!"
 		 end
@@ -221,6 +226,10 @@ class CdbDatafile
 		@metafull = metanew
 		@datafull = datanew
 		
+	end
+
+	def has_meta?
+		@srcapp == 'rtg'
 	end
 
 	def sortkey
@@ -255,33 +264,71 @@ class CdbImportDB
 
 		db_query( "create temporary table tempds like template_ds" )
 		db_query( "create temporary table tempdt like template_dt" )
+		db_query( "create temporary table tempev like template_ev" )
 
 	end
 
 	def import_data(df)
 
-		# Import dataset details into a temp table
-		db_query( "truncate table tempds" )
-		db_query( "load data infile '#{df.metafull}' into table tempds" )
-		log_info "Imported #{@db.affected_rows} rows from #{df.metafile} into tempds"
+		@cdb_err = nil
 
-		# Call procedure to check (and create) datasets
-		log_debug "SQL: call cdb_check_datasets( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
-		@db.query("call cdb_check_datasets( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )") { |rs|
-			log_info(rs.fetch_row[0]) if rs.num_rows > 0
-			}
+		if df.srcapp == 'rtg'
 
-		# Import data into a temp table
-		db_query( "truncate table tempdt" )
-		db_query( "load data infile '#{df.datafull}' into table tempdt ( sample_date, sample_hour, cdc_dataset_id, data_min, data_max, data_sum, data_count )" )
-		log_info "Imported #{@db.affected_rows} rows from #{df.datafile} into tempdt"
-
-		# Call procedure to store new data into the customer specific table
-		log_debug "SQL: call cdb_import_data( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
-		@db.query("call cdb_import_data( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )") { |rs|
-			log_info(rs.fetch_row[0]) if rs.num_rows > 0
-			}
+			# Import dataset details into a temp table
+			db_query( "truncate table tempds" )
+			db_query( "load data infile '#{df.metafull}' into table tempds" )
+			log_info "Imported #{@db.affected_rows} rows from #{df.metafile} into tempds"
 	
+			# Call procedure to check (and create) datasets
+			sql = "call cdb_check_datasets( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
+			log_debug "SQL: #{sql}"
+			@db.query(sql) { |rs|
+				log_info(rs.fetch_row[0]) if rs.num_rows > 0
+				}
+	
+			# Import data into a temp table
+			db_query( "truncate table tempdt" )
+			db_query( "load data infile '#{df.datafull}' into table tempdt ( sample_date, sample_hour, cdc_dataset_id, data_min, data_max, data_sum, data_count )" )
+			log_info "Loaded #{@db.affected_rows} rows from #{df.datafile} into tempdt"
+	
+			# Call procedure to store new data into the customer specific table
+			sql = "call cdb_import_data( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
+			log_debug "SQL: #{sql}"
+			@db.query(sql) { |rs|
+				msg = rs.fetch_row[0] or @cdb_err = "No message returned from cdb_import_data"
+				@cdb_err = msg if msg =~ /error/i
+				log_info(msg) unless @cdb_err
+				}
+
+		 elsif df.srcapp == 'nagevt'
+
+			# Import data into a temp table
+			db_query( "truncate table tempev" )
+			
+			sql  = "load data infile '#{df.datafull}' into table tempev fields terminated by ',' "
+			sql += " optionally enclosed by '\"' lines terminated by '\\r\\n'  ignore 1 lines "
+ 			sql += " ( host, service, ev_state, hard_soft, start_time, end_time, duration, next_state, reason, message )"
+
+			db_query( sql )
+			msg = "Loaded #{@db.affected_rows} rows from #{df.datafile} into tempev"
+			log_info msg
+			@db.query( "call cdb_logit('cdb_import_files','#{msg}')" )
+	
+			# Call procedure to store new data into the customer specific table
+			sql = "call nag_import_events( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
+			log_debug "SQL: #{sql}"
+			@db.query(sql) { |rs|
+				msg = rs.fetch_row[0] or @cdb_err = "No message returned from nag_import_events"
+				@cdb_err = msg if msg =~ /error/i
+				log_info(msg) unless @cdb_err
+				}
+
+		 else
+			@cdb_err = "Import failed, unknown srcapp '#{df.srcapp}' for file '#{df.datafull}'"
+		 end
+	
+		raise @cdb_err if @cdb_err
+
 	end
 
 	def test(tab)
@@ -292,6 +339,7 @@ class CdbImportDB
 	def closedown
 		db_query( "drop temporary table tempds" )
 		db_query( "drop temporary table tempdt" )
+		db_query( "drop temporary table tempev" )
 		@db.close
 	end
 

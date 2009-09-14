@@ -23,7 +23,8 @@ require "config"
 #
 conf = CONFIG[:cdb_import_files]
 #
-logname = File.expand_path(conf[:logname])
+logname = conf[:logname]
+logname = File.expand_path(logname) if logname.class == String
 imppath = File.expand_path(conf[:importdir])
 db_info = conf[:db_info]
 
@@ -64,6 +65,7 @@ begin
 	
 imp.each { |df| 
 	begin
+		puts "Processing: #{File.basename(df)}" 
 		cdb.import_data(df)
 		imp.move_to_save(df) 
 	 rescue
