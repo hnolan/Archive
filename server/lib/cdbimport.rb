@@ -306,7 +306,7 @@ class CdbImportDB
 			db_query( "truncate table tempev" )
 			
 			sql  = "load data infile '#{df.datafull}' into table tempev fields terminated by ',' "
-			sql += " optionally enclosed by '\"' lines terminated by '\\r\\n'  ignore 1 lines "
+			sql += " optionally enclosed by '\"' lines terminated by '\\n'  ignore 1 lines "
  			sql += " ( host, service, ev_state, hard_soft, start_time, end_time, duration, next_state, reason, message )"
 
 			db_query( sql )
