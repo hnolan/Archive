@@ -28,7 +28,7 @@ CREATE TABLE `cdb_log` (
   `pn` varchar(80) default NULL,
   `txt` varchar(1024) default NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=334 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=357 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -45,6 +45,27 @@ DROP TABLE IF EXISTS `dataset_details`;
   `instance` varchar(250),
   `counter` varchar(50)
 ) ENGINE=MyISAM */;
+
+--
+-- Table structure for table `dt15_nagios_events`
+--
+
+DROP TABLE IF EXISTS `dt15_nagios_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `dt15_nagios_events` (
+  `start_time` datetime NOT NULL,
+  `cdb_instance_id` int(10) unsigned NOT NULL,
+  `cdb_datasource_id` int(10) unsigned NOT NULL,
+  `end_time` datetime default NULL,
+  `duration` int(10) unsigned default '0',
+  `ev_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') NOT NULL,
+  `hard_soft` enum('HARD','SOFT') NOT NULL,
+  `next_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') default NULL,
+  `message` varchar(512) NOT NULL,
+  PRIMARY KEY  (`start_time`,`cdb_instance_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `dt20_hourly_data`
@@ -197,7 +218,7 @@ CREATE TABLE `m02_objects` (
   `subsystem` varchar(50) default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `IDX_object_name_unique` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -214,6 +235,7 @@ CREATE TABLE `m03_instances` (
   `name` varchar(250) default NULL,
   `parent_name` varchar(50) default NULL,
   `instance_index` varchar(50) default NULL,
+  `latest_event` datetime default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `IDX_instance_name_unique` USING BTREE (`cdb_machine_id`,`cdb_object_id`,`name`),
   KEY `FK_instance_object` USING BTREE (`cdb_object_id`),
@@ -307,6 +329,27 @@ CREATE TABLE `m07_dataset_map` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `nagios_events_sthc`
+--
+
+DROP TABLE IF EXISTS `nagios_events_sthc`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `nagios_events_sthc` (
+  `start_time` datetime NOT NULL,
+  `cdb_instance_id` int(10) unsigned NOT NULL,
+  `cdb_datasource_id` int(10) unsigned NOT NULL,
+  `end_time` datetime default NULL,
+  `duration` int(10) unsigned default '0',
+  `ev_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') NOT NULL,
+  `hard_soft` enum('HARD','SOFT') NOT NULL,
+  `next_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') default NULL,
+  `message` varchar(512) NOT NULL,
+  PRIMARY KEY  (`start_time`,`cdb_instance_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `template_ds`
 --
 
@@ -342,6 +385,46 @@ CREATE TABLE `template_dt` (
   `sample_time` datetime default NULL,
   `cdb_dataset_id` int(10) unsigned NOT NULL default '0'
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `template_ev`
+--
+
+DROP TABLE IF EXISTS `template_ev`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `template_ev` (
+  `host` varchar(100) NOT NULL,
+  `service` varchar(100) default NULL,
+  `ev_state` enum('UP','DOWN','UNKNOWN','OK','WARNING','CRITICAL') NOT NULL,
+  `hard_soft` enum('HARD','SOFT') NOT NULL,
+  `start_time` datetime NOT NULL,
+  `end_time` datetime default '0000-00-00 00:00:00',
+  `duration` int(10) unsigned default '0',
+  `next_state` enum('UP','DOWN','UNKNOWN','OK','WARNING','CRITICAL') default NULL,
+  `reason` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
+  `message` varchar(512) NOT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1 ROW_FORMAT=DYNAMIC;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `template_ev_inst`
+--
+
+DROP TABLE IF EXISTS `template_ev_inst`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `template_ev_inst` (
+  `i_id` int(10) unsigned default '0',
+  `m_id` int(10) unsigned NOT NULL default '0',
+  `o_id` int(10) unsigned NOT NULL default '0',
+  `cdb_machine` varchar(100) NOT NULL,
+  `cdb_object` varchar(18) NOT NULL default '',
+  `cdb_instance` varchar(100) default NULL,
+  `nag_event_type` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
+  `latest_event` datetime default NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -987,6 +1070,250 @@ BEGIN
   select * from cdb_log order by id desc limit 100;
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `nag_check_instances` */;;
+/*!50003 SET SESSION SQL_MODE=""*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `nag_check_instances`(
+        p_prefix varchar(10),
+        p_srcsrv varchar(45),
+        p_srcapp varchar(45)
+        )
+BEGIN
+
+/*
+
+This procedure scans the raw events in the input table and produces
+an output table which maps the host, service and reason (event type)
+fields on to instances ids which are subsequently used to store the
+event data.
+
+The procedure creates new machine and instance records as required.
+
+Input table: tempev
+
+The table is expected to exist with at least the following columns:
+
+  `host` varchar(100) NOT NULL,
+  `service` varchar(100) default NULL,
+  `start_time` datetime NOT NULL,
+  `end_time` datetime default '0000-00-00 00:00:00',
+  `reason` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
+
+Any other columns are ignored.
+
+*/
+
+-- Additional block to allow early exit from sproc
+main: BEGIN
+
+-- Declare variables and cursors
+declare pn varchar(50) default 'nag_check_instances';
+declare rc integer default 0;
+declare mrc integer default 0;
+declare irc integer default 0;
+declare dsrcid integer default 0;
+declare custid integer default 0;
+
+-- ---------------------------------------
+-- Check that a unique datasource exists
+-- ---------------------------------------
+select count(*) from m06_datasources ds
+ join m00_customers c on c.id = ds.cdb_customer_id
+ where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
+ into rc;
+
+if rc = 1 then
+  select ds.id, ds.cdb_customer_id from m06_datasources ds
+   join m00_customers c on c.id = ds.cdb_customer_id
+   where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
+   into dsrcid, custid;
+ else
+  call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp, ' )' ) );
+  call cdb_logit( pn, concat( 'Exit. *** Error - ', rc, ' datasources found ***' ) );
+  leave main;
+ end if;
+
+-- ---------------------------------------
+--  Create machines from any new hosts
+-- ---------------------------------------
+insert into m01_machines ( cdb_customer_id, name )
+ select custid, t.host
+  from ( select distinct host from tempev ) t
+ where t.host not in ( select name from m01_machines m where m.cdb_customer_id = custid );
+
+set mrc = row_count();
+
+-- Report machine creation, if any were found
+if mrc > 0 then
+  call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp, ' )' ) );
+  call cdb_logit( pn, concat( mrc, ' new machines created' ) );
+ end if;
+
+-- ---------------------------------------
+-- Populate temporary table to hold
+--  instance details for lookup
+-- ---------------------------------------
+insert into temp_instances ( i_id, m_id, o_id, cdb_machine, cdb_object, cdb_instance, nag_event_type, latest_event )
+select i.id as i_id, m.id as m_id, o.id as o_id, ni.* from (
+ select host as cdb_machine,
+  case
+   when reason like '%HOST%' then _latin1 'NagiosHostEvent'
+   when reason like '%SERVICE%' then _latin1 'NagiosServiceEvent'
+   else _latin1 'NagiosOtherEvent'
+   end as cdb_object,
+  service as cdb_instance, reason as nag_event_type, IFNULL( max(end_time), max(start_time) ) as latest_event
+  from tempev group by host, service order by host, service
+ ) ni
+  join m01_machines m on m.name = ni.cdb_machine
+  join m02_objects o on o.name = ni.cdb_object
+  left join m03_instances i on i.cdb_machine_id = m.id and i.cdb_object_id = o.id and i.name = ni.cdb_instance
+ where m.cdb_customer_id = custid;
+
+-- ---------------------------------------
+--  Create any new instances
+-- ---------------------------------------
+insert into m03_instances ( cdb_machine_id, cdb_object_id, name, latest_event )
+ select m_id, o_id, cdb_instance, latest_event from temp_instances
+  where i_id IS NULL;
+
+set irc = row_count();
+
+-- Handle instance creation, if any were found
+if irc > 0 then
+
+  if mrc = 0 then
+    call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp, ' )' ) );
+    call cdb_logit( pn, concat( mrc, ' new machines created' ) );
+   end if;
+
+  call cdb_logit( pn, concat( irc, ' new instances created' ) );
+
+  -- Update temp table with new instance ids
+  update temp_instances ti join m03_instances i
+    on ti.m_id = i.cdb_machine_id and ti.o_id = i.cdb_object_id and ti.cdb_instance = i.name
+   set ti.i_id = i.id;
+
+  end if;
+
+-- select * from temp_instances;
+
+if mrc > 0 or irc > 0 then
+  call cdb_logit( pn, concat( 'Exit' ) );
+ end if;
+
+END main;
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `nag_import_events` */;;
+/*!50003 SET SESSION SQL_MODE=""*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `nag_import_events`(
+        p_prefix varchar(10),
+        p_srcsrv varchar(45),
+        p_srcapp varchar(45)
+        )
+BEGIN
+
+/*
+This procedure expects a table called tempdt to exist
+with at least the following columns:
+
+  sample_date date not null,
+  sample_hour int(10) unsigned not null,
+  cdc_dataset_id int(10) unsigned not null,
+  data_min float not null,
+  data_max float not null,
+  data_sum float not null,
+  data_count int(10) unsigned not null
+
+Any other columns are ignored.
+
+*/
+
+-- Additional block to allow early exit from sproc
+main: BEGIN
+
+-- Declare variables and cursors
+declare pn varchar(50) default 'nag_import_events';
+declare rc integer default 0;
+declare dsrcid integer default 0;
+declare eventtab varchar(50) default 'dt15_nagios_events';
+declare msg varchar(250) default '';
+
+-- log entry
+call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp, ' )' ) );
+
+-- ---------------------------
+-- Validate datasource
+-- ---------------------------
+
+-- Check that a unique datasource exists
+select count(*) from m06_datasources ds
+ join m00_customers c on c.id = ds.cdb_customer_id
+ where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
+ into rc;
+
+if rc = 1 then
+  select ds.id, ds.hourly_table from m06_datasources ds
+   join m00_customers c on c.id = ds.cdb_customer_id
+   where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
+   into dsrcid, eventtab;
+ else
+  set msg = concat( 'Exit. *** Error - ', rc, ' datasources found ***' );
+  call cdb_logit( pn, msg );
+  select msg;
+  leave main;
+ end if;
+
+-- ---------------------------
+-- Obtain instance lookup table
+-- ---------------------------
+create temporary table temp_instances like template_ev_inst;
+call nag_check_instances( p_prefix, p_srcsrv, p_srcapp );
+
+-- ---------------------------
+-- Import data
+-- ---------------------------
+
+-- Insert new mapped data
+-- ( We only want to store host/service alert records )
+set @sql = concat( 'insert into ', eventtab, ' ( cdb_instance_id, cdb_datasource_id, ev_state, hard_soft, start_time, end_time, duration, next_state, message )' );
+set @sql = concat( @sql, ' select ti.i_id, ', dsrcid, ', te.ev_state, te.hard_soft, te.start_time, te.end_time, te.duration, te.next_state, te.message ' );
+set @sql = concat( @sql, '  from tempev te join temp_instances ti on te.host = ti.cdb_machine and te.service = ti.cdb_instance ' );
+set @sql = concat( @sql, '   and ti.cdb_object = IF( reason = ''SERVICE ALERT'',  _latin1 ''NagiosServiceEvent'', _latin1 ''NagiosHostEvent'' ) ' );
+set @sql = concat( @sql, '  where te.reason = ''SERVICE ALERT'' or te.reason = ''HOST ALERT'' order by start_time ' );
+
+prepare imp from @sql;
+execute imp;
+
+set rc = row_count();
+
+-- Exit routine if no new data was found
+if rc = 0 then
+  set msg = concat( 'Exit. No new events found' );
+  call cdb_logit( pn, msg );
+  select msg;
+  leave main;
+ end if;
+
+-- ---------------------------------------
+-- Update instance table with latest times
+-- ---------------------------------------
+update m03_instances i join temp_instances ti on ti.i_id = i.id
+ set i.latest_event = ti.latest_event;
+
+-- Tidy up
+drop temporary table temp_instances;
+
+-- Log valid entry
+set msg = concat( 'Exit. Inserted ', rc, ' event rows into ', eventtab );
+call cdb_logit( pn, msg );
+select msg;
+
+-- End of main block
+END;
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `web_get_chart_data` */;;
 /*!50003 SET SESSION SQL_MODE=""*/;;
 /*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `web_get_chart_data`(
@@ -1243,6 +1570,33 @@ LOCK TABLES `m00_customers` WRITE;
 /*!40000 ALTER TABLE `m00_customers` DISABLE KEYS */;
 INSERT INTO `m00_customers` VALUES (57,'AAML','Arts Alliance Media Ltd'),(58,'ABCO','Askham Bryan College'),(59,'APTO','Apetito Limited'),(60,'BIFL','Bishop Fleming'),(61,'BLNW','Business Link Northwest'),(62,'BRCC','Bristol City Council'),(63,'CLNH','Clarendon House'),(64,'CLRH','Claire House'),(65,'CWNT','Chelsea & Westminster NHS Trust'),(66,'DIDA','DiData'),(67,'EDET','eDT'),(68,'EMSI','ems-Internet'),(69,'FANL','Fantasy League'),(70,'HRDS','Harrods Limited'),(71,'IKON','IKON'),(72,'IMJA','IMERJA Limited'),(73,'INVM','Invmo Limited'),(74,'ITRM','IT Resource Management'),(75,'KWBC','Knowsley Metropolitan Borough Council'),(76,'KWHT','Knowsley Housing Trust'),(77,'LBRE','London Borough of Redbridge'),(78,'LORO','London Overground Rail Operations Ltd'),(79,'MAFR','Manchester Fire and Rescue'),(80,'MPAY','MiPay'),(81,'MRCO','Medical Research Council'),(82,'NELC','North East Lincolnshire Council'),(83,'NOBI','Nobisco'),(84,'NWLG','North West Learning Grid'),(85,'OTWO','O2'),(86,'PTOP','Point to Point'),(87,'REDE','Retail Decisions'),(88,'RNLI','RNLI LifeBoat'),(89,'RWAL','Rockwood Additives Limited'),(90,'SABC','Salford MBC'),(91,'SDSO','Specialist Data Solutions'),(92,'SEBC','Sefton MBC'),(93,'STHC','St.Helens MBC'),(94,'SNTX','Synetrix'),(95,'SOUN','Southampton University'),(96,'SPEN','Sport England'),(97,'STAN','St Andrews'),(98,'SUDI','Supporter Direct'),(99,'SUHI','Sussex HIS'),(100,'TAPL','Talentplan / Clicks and Links'),(101,'TRHT','Trafford Housing Trust'),(102,'TOTE','Totesport'),(103,'UNPA','Unity Partnership'),(104,'VIME','Virgin Media'),(105,'VLTX','Vaultex UK'),(106,'WKBC','Wakefield Metopolitan District Council'),(107,'WRBC','Warrington Borough Council'),(108,'LAHC','Lancashire Health Community');
 /*!40000 ALTER TABLE `m00_customers` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `m02_objects`
+--
+
+DROP TABLE IF EXISTS `m02_objects`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `m02_objects` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `name` varchar(50) NOT NULL,
+  `type` varchar(50) default NULL,
+  `subsystem` varchar(50) default NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `IDX_object_name_unique` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `m02_objects`
+--
+
+LOCK TABLES `m02_objects` WRITE;
+/*!40000 ALTER TABLE `m02_objects` DISABLE KEYS */;
+INSERT INTO `m02_objects` VALUES (1,'Interface','capacity',NULL),(2,'NagiosHostEvent','event',NULL),(3,'NagiosServiceEvent','event',NULL),(4,'NagiosOtherEvent','event',NULL);
+/*!40000 ALTER TABLE `m02_objects` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --

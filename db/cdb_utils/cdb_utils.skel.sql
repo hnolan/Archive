@@ -21,7 +21,9 @@
 DELIMITER ;;
 /*!50003 DROP PROCEDURE IF EXISTS `dump_code` */;;
 /*!50003 SET SESSION SQL_MODE=""*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `dump_code`()
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `dump_code`(
+        dumpdir varchar(50)
+        )
 BEGIN
 
 declare pn varchar(50) default 'dump_code';
@@ -31,7 +33,6 @@ declare done int default 0;
 
 declare dumpdat varchar(20);
 declare dumpdb varchar(50);
-declare dumpdir varchar(50);
 declare dumpfil varchar(250);
 declare dumpfil2 varchar(250);
 declare procname varchar(50);
@@ -39,9 +40,8 @@ declare viewname varchar(50);
 
 declare proccur cursor for select db, name from mysql.proc;
 declare continue handler for not found set done = 1;
-declare continue handler for 1086 set done = 1;        
+declare continue handler for 1086 set done = 1;
 
-set dumpdir = '/home/huw/dev/mysql/procs';
 set dumpdat = date_format(now(),'%Y%m%d.%H%i');
 
 open proccur;
@@ -69,7 +69,7 @@ repeat
  until done end repeat;
 
  close proccur;
- 
+
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `ls` */;;
