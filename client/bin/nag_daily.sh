@@ -14,7 +14,7 @@ EXPDIR=$HOME/export/events
 
 # Send export files to central server
 #
-rsync -rzv --remove-source-files --include=${PREFIX}\*.csv --exclude \* ${EXPDIR}/ sm1::events
+rsync -rzv --remove-source-files --include=${PREFIX}\*ta --exclude \* ${EXPDIR}/ sm1::events
 
 # That's it
 
