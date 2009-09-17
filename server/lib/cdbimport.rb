@@ -229,7 +229,7 @@ class CdbDataFile
 	end
 
 	def has_meta?
-		@srcapp == 'rtg'
+		true	# @srcapp == 'rtg'
 	end
 
 	def sortkey
@@ -264,6 +264,7 @@ class CdbImportDB
 
 		db_query( "create temporary table tempds like template_ds" )
 		db_query( "create temporary table tempdt like template_dt" )
+		db_query( "create temporary table tempin like template_in" )
 		db_query( "create temporary table tempev like template_ev" )
 
 	end
@@ -275,53 +276,25 @@ class CdbImportDB
 		if df.srcapp == 'rtg'
 
 			# Import dataset details into a temp table
-			db_query( "truncate table tempds" )
-			db_query( "load data infile '#{df.metafull}' into table tempds" )
-			log_info "Imported #{@db.affected_rows} rows from #{df.metafile} into tempds"
+			load_data( df.metafull, 'tempds' )
 	
 			# Call procedure to check (and create) datasets
-			sql = "call cdb_check_datasets( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
-			log_debug "SQL: #{sql}"
-			@db.query(sql) { |rs|
-				log_info(rs.fetch_row[0]) if rs.num_rows > 0
-				}
+			db_call("cdb_check_datasets",df)
 	
-			# Import data into a temp table
-			db_query( "truncate table tempdt" )
-			db_query( "load data infile '#{df.datafull}' into table tempdt ( sample_date, sample_hour, cdc_dataset_id, data_min, data_max, data_sum, data_count )" )
-			log_info "Loaded #{@db.affected_rows} rows from #{df.datafile} into tempdt"
+			# Import hourly data into a temp table
+			load_data( df.datafull, 'tempdt' )
 	
 			# Call procedure to store new data into the customer specific table
-			sql = "call cdb_import_data( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
-			log_debug "SQL: #{sql}"
-			@db.query(sql) { |rs|
-				msg = rs.fetch_row[0] or @cdb_err = "No message returned from cdb_import_data"
-				@cdb_err = msg if msg =~ /error/i
-				log_info(msg) unless @cdb_err
-				}
+			db_call("cdb_import_data",df)
 
 		 elsif df.srcapp == 'nagevt'
 
-			# Import data into a temp table
-			db_query( "truncate table tempev" )
-			
-			sql  = "load data infile '#{df.datafull}' into table tempev fields terminated by ',' "
-			sql += " optionally enclosed by '\"' lines terminated by '\\n'  ignore 1 lines "
- 			sql += " ( host, service, ev_state, hard_soft, start_time, end_time, duration, next_state, reason, message )"
+			# Load raw event data into temp tables
+			load_data( df.metafull, 'tempin' )
+			load_data( df.datafull, 'tempev' )
 
-			db_query( sql )
-			msg = "Loaded #{@db.affected_rows} rows from #{df.datafile} into tempev"
-			log_info msg
-			@db.query( "call cdb_logit('cdb_import_files','#{msg}')" )
-	
-			# Call procedure to store new data into the customer specific table
-			sql = "call nag_import_events( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
-			log_debug "SQL: #{sql}"
-			@db.query(sql) { |rs|
-				msg = rs.fetch_row[0] or @cdb_err = "No message returned from nag_import_events"
-				@cdb_err = msg if msg =~ /error/i
-				log_info(msg) unless @cdb_err
-				}
+			# Call procedure to store new events into the customer specific table
+			db_call("nag_import_events",df)
 
 		 else
 			@cdb_err = "Import failed, unknown srcapp '#{df.srcapp}' for file '#{df.datafull}'"
@@ -339,11 +312,52 @@ class CdbImportDB
 	def closedown
 		db_query( "drop temporary table tempds" )
 		db_query( "drop temporary table tempdt" )
+		db_query( "drop temporary table tempin" )
 		db_query( "drop temporary table tempev" )
 		@db.close
 	end
 
  private
+
+	def load_data(fn,tt)
+
+		# Build sql statement
+		sql = "load data infile '#{fn}' into table #{tt} " + 
+		case tt
+		 when 'tempds' :
+		 	" ( cdc_dataset_id, cdc_machine, cdc_object, cdc_instance, cdc_counter, speed, description )"
+		 when 'tempdt' :		
+			" ( sample_date, sample_hour, cdc_dataset_id, data_min, data_max, data_sum, data_count )"
+		 when 'tempin' :		
+			" fields terminated by ',' optionally enclosed by '\"' lines terminated by '\\r\\n'  ignore 1 lines " +
+			" ( svc_id, host, service, latest_event )"
+		 when 'tempev' :		
+			" fields terminated by ',' optionally enclosed by '\"' lines terminated by '\\r\\n'  ignore 1 lines " +
+ 			" ( svc_id, ev_state, hard_soft, start_time, end_time, duration, next_state, entry_type, message )"
+		 end
+
+		# Empty the temp table
+		db_query( "truncate table #{tt}" )
+
+		# Call the data load statement
+		db_query( sql )
+
+		# Report response to logs
+		msg = "Loaded #{@db.affected_rows} rows from #{File.basename(fn)} into #{tt}"
+		log_info msg
+		@db.query( "call cdb_logit('cdb_import_files','#{msg}')" )
+	
+	end
+
+	def db_call( sp, df )
+		sql = "call #{sp}( '#{df.prefix}', '#{df.srcsrv}', '#{df.srcapp}' )"
+		log_debug "SQL: #{sql}"
+		@db.query(sql) { |rs|
+			msg = rs.fetch_row[0] or @cdb_err = "No message returned from #{sp}"
+			@cdb_err = msg if msg =~ /error/i
+			log_info(msg) unless @cdb_err
+			}
+	end
  
   def db_query(sql)
 		log_debug("SQL: #{sql}")

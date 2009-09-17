@@ -1,9 +1,9 @@
 #=====================================================================
-#	cdb_import_files.rb
+#	nag_import_files.rb
 #---------------------------------------------------------------------
 #
-#	This script manages the importing of data files into the capacity 
-# database. 
+#	This script manages the importing of nagios event files into the 
+# capacity database. 
 #
 #	Most of the heavy lifting is done by classes which represent the 
 # import directory and the connection to the database.
@@ -27,14 +27,15 @@ conf = CONFIG[:nag_import_files]
 #
 logname = conf[:logname]
 logname = File.expand_path(logname) if logname.class == String
+loglevel = conf[:loglevel] || Logger::INFO
 imppath = File.expand_path(conf[:importdir])
 db_info = conf[:db_info]
 
+# Set up log writer
+#
 logger = Logger.new(logname)
-
 logger.progname = progname
-# logger.level = Logger::INFO
-logger.level = Logger::DEBUG
+logger.level = loglevel
 
 logger.info ""	# Blank line to aid log readability
 logger.info "---- Entering #{progname} ----"
@@ -66,7 +67,7 @@ begin
 	
 imp.each { |df| 
 	begin
-		puts "Processing: #{df.datafile}" 
+		puts "Processing: #{df}" 
 		cdb.import_data(df)
 		imp.move_to_save(df) 
 	 rescue
