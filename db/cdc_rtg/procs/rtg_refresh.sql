@@ -1,3 +1,7 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdc_rtg`.`rtg_refresh` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `rtg_refresh` ()
 BEGIN
 
 declare pn varchar(50) default 'rtg_refresh';
@@ -62,4 +66,6 @@ close tabcur;
 
 call cdc_logit( pn, concat( 'Exit. Refreshed stats from ', tc, ' rtg tables' ) );
 
-END
+END $$
+
+DELIMITER ;

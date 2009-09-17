@@ -48,7 +48,7 @@ select count(*) from m06_datasources ds
  into rc;
 
 if rc = 1 then
-  select ds.id, ds.hourly_table from m06_datasources ds
+  select ds.id, ds.target_table from m06_datasources ds
    join m00_customers c on c.id = ds.cdb_customer_id
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into dsrcid, eventtab;
@@ -67,6 +67,50 @@ call nag_check_instances( p_prefix, p_srcsrv, p_srcapp );
 
 -- ---------------------------
 -- Import data
+-- ---------------------------
+
+/*
+
+-- Delete duplicate data or unknown datasets
+delete from tempdt where cdb_dataset_id = 0;
+
+set @sql = concat( 'delete from tempdt dt using tempdt dt join ', hourtab, ' ht ' );
+set @sql = concat( @sql, '  on dt.cdb_dataset_id = ht.cdb_dataset_id and ht.sample_time = dt.sample_time' );
+
+prepare deldup from @sql;
+execute deldup;
+
+set rc = row_count();
+if rc > 0 then
+  call cdb_logit( pn, concat( 'Discarded ', rc, ' duplicate rows' ) );
+ end if;
+
+-- Get bounds for date range to limit search of existing table data
+select min(sample_date), max(date_add( sample_date, interval 1 day )) from tempdt into sd, ed;
+
+-- ---------------------------
+-- Import data
+-- ---------------------------
+
+-- Insert new mapped data
+set @sql = concat( 'insert into ', hourtab, ' ' );
+set @sql = concat( @sql, ' select sample_time, cdb_dataset_id, sample_date, sample_hour, ' );
+set @sql = concat( @sql, '   data_min, data_max, data_sum, data_count from tempdt' );
+
+prepare insnew from @sql;
+execute insnew;
+
+set rc = row_count();
+
+-- Exit routine if no new data was found
+if rc = 0 then
+  call cdb_logit( pn, concat( 'Exit. No new data found' ) );
+  select concat( 'cdb_import_data: No new data found'  ) as msg;
+  leave main;
+ end if;
+
+*/
+
 -- ---------------------------
 
 -- Insert new mapped data

@@ -40,14 +40,21 @@ if rc >= 1 then
   leave main;
  end if;
 
--- Check for data table
-set tabnam = concat( 'hourly_data_', lower(p_prefix) );
-set @sql = concat( 'create table if not exists ', tabnam, ' like dt20_hourly_data;' );
+-- Check for data table type
+if p_srcapp = 'nagevt' then
+  set tabnam = concat( 'nagios_events_', lower(p_prefix) );
+  set @sql = concat( 'create table if not exists ', tabnam, ' like dt15_nagios_events;' );
+ else
+  set tabnam = concat( 'hourly_data_', lower(p_prefix) );
+  set @sql = concat( 'create table if not exists ', tabnam, ' like dt20_hourly_data;' );
+ end if;
+
+-- Create table if necessary
 prepare nt from @sql;
 execute nt;
 
 -- Create new datasource
-set @sql = concat( 'insert into m06_datasources ( cdb_customer_id, source_server, source_app, hourly_table ) ' );
+set @sql = concat( 'insert into m06_datasources ( cdb_customer_id, source_server, source_app, target_table ) ' );
 set @sql = concat( @sql, ' values ( ', pfxid, ', ''', p_srcsrv, ''', ''', p_srcapp, ''', ''', tabnam, ''' );' );
 prepare nd from @sql;
 execute nd;

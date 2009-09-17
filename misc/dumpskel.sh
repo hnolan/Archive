@@ -21,11 +21,12 @@ dos2unix $DUMPFIL
 
 # ---------------------------------------------------
 
-#DB=cdc_rtg
-#DUMPFIL=${CWD}/db/${DB}/${DB}.skel.sql
-#
-#mysqldump -p$PWD -u root $DB --no-data --routines --skip-dump-date >$DUMPFIL
-#mysqldump -p$PWD -u root $DB cdc_counters --skip-dump-date >>$DUMPFIL
+DB=cdc_rtg
+DUMPFIL=${CWD}/db/${DB}/${DB}.skel.sql
+
+mysqldump -p$PWD -u root $DB --no-data --routines --skip-dump-date >$DUMPFIL
+mysqldump -p$PWD -u root $DB cdc_counters --skip-dump-date >>$DUMPFIL
+dos2unix $DUMPFIL
 
 # ---------------------------------------------------
 

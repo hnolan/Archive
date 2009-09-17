@@ -1,3 +1,10 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdc_rtg`.`cdc_import` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `cdc_import` (
+        import_upto varchar(50),
+        days_before int
+        )
 BEGIN
 
 
@@ -138,4 +145,6 @@ drop temporary table tempdata;
 -- Log exit
 call cdc_logit( pn, CONCAT( 'Exit. Imported ', rc, ' hourly rows' ) );
 
-END
+END $$
+
+DELIMITER ;

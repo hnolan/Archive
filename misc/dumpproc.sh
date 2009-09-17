@@ -12,7 +12,7 @@ mysql -p$PWD -u root -e "call cdb_utils.dump_code('$DUMPDIR')"
 # Combine dumped fragments and store under parent DB
 cd $DUMPDIR
 
-for CodeFile in `ls cdb_dev.*.code.sql cdb_test.*.code.sql cdb_utils.*.code.sql`
+for CodeFile in `ls cdb_dev.*.code.sql cdb_test.*.code.sql cdc_rtg.*.code.sql cdb_utils.*.code.sql`
  do
 	# Parse filename to extract fields
 	#

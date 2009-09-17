@@ -1,3 +1,9 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdc_rtg`.`cdc_trim` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `cdc_trim` (
+        days_old int
+        )
 BEGIN
 
 declare pn varchar(50) default 'cdc_trim';
@@ -50,4 +56,6 @@ set rc = row_count();
 call cdc_logit( pn, concat('Exit. Deleted ', rc, ' rows from cdc_hourly_data') );
 
 
-END
+END $$
+
+DELIMITER ;

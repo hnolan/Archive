@@ -28,7 +28,7 @@ CREATE TABLE `cdb_log` (
   `pn` varchar(80) default NULL,
   `txt` varchar(1024) default NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=685 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=687 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -220,7 +220,7 @@ CREATE TABLE `m00_customers` (
   `fullname` varchar(50) default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `IDX_prefix_unique` USING BTREE (`prefix`)
-) ENGINE=InnoDB AUTO_INCREMENT=110 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -341,11 +341,11 @@ CREATE TABLE `m06_datasources` (
   `cdb_customer_id` int(10) unsigned NOT NULL,
   `source_server` varchar(45) NOT NULL,
   `source_app` varchar(45) NOT NULL,
-  `hourly_table` varchar(45) NOT NULL,
+  `target_table` varchar(45) NOT NULL,
   PRIMARY KEY  (`id`),
   KEY `FK_datasource_customer` USING BTREE (`cdb_customer_id`),
   CONSTRAINT `FK_datasource_customer` FOREIGN KEY (`cdb_customer_id`) REFERENCES `m00_customers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -364,6 +364,27 @@ CREATE TABLE `m07_dataset_map` (
   CONSTRAINT `FK_map_dataset` FOREIGN KEY (`cdb_dataset_id`) REFERENCES `m05_datasets` (`id`),
   CONSTRAINT `FK_map_datasource` FOREIGN KEY (`cdb_datasource_id`) REFERENCES `m06_datasources` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `nagios_events_stan`
+--
+
+DROP TABLE IF EXISTS `nagios_events_stan`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `nagios_events_stan` (
+  `start_time` datetime NOT NULL,
+  `cdb_instance_id` int(10) unsigned NOT NULL,
+  `cdb_datasource_id` int(10) unsigned NOT NULL,
+  `end_time` datetime default NULL,
+  `duration` int(10) unsigned default '0',
+  `ev_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') NOT NULL,
+  `hard_soft` enum('HARD','SOFT') NOT NULL,
+  `next_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') default NULL,
+  `message` varchar(512) NOT NULL,
+  PRIMARY KEY  (`start_time`,`cdb_instance_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -809,14 +830,21 @@ if rc >= 1 then
   leave main;
  end if;
 
--- Check for data table
-set tabnam = concat( 'hourly_data_', lower(p_prefix) );
-set @sql = concat( 'create table if not exists ', tabnam, ' like dt20_hourly_data;' );
+-- Check for data table type
+if p_srcapp = 'nagevt' then
+  set tabnam = concat( 'nagios_events_', lower(p_prefix) );
+  set @sql = concat( 'create table if not exists ', tabnam, ' like dt15_nagios_events;' );
+ else
+  set tabnam = concat( 'hourly_data_', lower(p_prefix) );
+  set @sql = concat( 'create table if not exists ', tabnam, ' like dt20_hourly_data;' );
+ end if;
+
+-- Create table if necessary
 prepare nt from @sql;
 execute nt;
 
 -- Create new datasource
-set @sql = concat( 'insert into m06_datasources ( cdb_customer_id, source_server, source_app, hourly_table ) ' );
+set @sql = concat( 'insert into m06_datasources ( cdb_customer_id, source_server, source_app, target_table ) ' );
 set @sql = concat( @sql, ' values ( ', pfxid, ', ''', p_srcsrv, ''', ''', p_srcapp, ''', ''', tabnam, ''' );' );
 prepare nd from @sql;
 execute nd;
@@ -877,7 +905,7 @@ select count(*) from m06_datasources ds
  into rc;
 
 if rc = 1 then
-  select ds.id, ds.hourly_table from m06_datasources ds
+  select ds.id, ds.target_table from m06_datasources ds
    join m00_customers c on c.id = ds.cdb_customer_id
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into dsrcid, hourtab;
@@ -1312,7 +1340,7 @@ select count(*) from m06_datasources ds
  into rc;
 
 if rc = 1 then
-  select ds.id, ds.hourly_table from m06_datasources ds
+  select ds.id, ds.target_table from m06_datasources ds
    join m00_customers c on c.id = ds.cdb_customer_id
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into dsrcid, eventtab;
@@ -1331,6 +1359,50 @@ call nag_check_instances( p_prefix, p_srcsrv, p_srcapp );
 
 -- ---------------------------
 -- Import data
+-- ---------------------------
+
+/*
+
+-- Delete duplicate data or unknown datasets
+delete from tempdt where cdb_dataset_id = 0;
+
+set @sql = concat( 'delete from tempdt dt using tempdt dt join ', hourtab, ' ht ' );
+set @sql = concat( @sql, '  on dt.cdb_dataset_id = ht.cdb_dataset_id and ht.sample_time = dt.sample_time' );
+
+prepare deldup from @sql;
+execute deldup;
+
+set rc = row_count();
+if rc > 0 then
+  call cdb_logit( pn, concat( 'Discarded ', rc, ' duplicate rows' ) );
+ end if;
+
+-- Get bounds for date range to limit search of existing table data
+select min(sample_date), max(date_add( sample_date, interval 1 day )) from tempdt into sd, ed;
+
+-- ---------------------------
+-- Import data
+-- ---------------------------
+
+-- Insert new mapped data
+set @sql = concat( 'insert into ', hourtab, ' ' );
+set @sql = concat( @sql, ' select sample_time, cdb_dataset_id, sample_date, sample_hour, ' );
+set @sql = concat( @sql, '   data_min, data_max, data_sum, data_count from tempdt' );
+
+prepare insnew from @sql;
+execute insnew;
+
+set rc = row_count();
+
+-- Exit routine if no new data was found
+if rc = 0 then
+  call cdb_logit( pn, concat( 'Exit. No new data found' ) );
+  select concat( 'cdb_import_data: No new data found'  ) as msg;
+  leave main;
+ end if;
+
+*/
+
 -- ---------------------------
 
 -- Insert new mapped data
@@ -1570,7 +1642,7 @@ CREATE TABLE `m00_customers` (
   `fullname` varchar(50) default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `IDX_prefix_unique` USING BTREE (`prefix`)
-) ENGINE=InnoDB AUTO_INCREMENT=110 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1579,7 +1651,7 @@ CREATE TABLE `m00_customers` (
 
 LOCK TABLES `m00_customers` WRITE;
 /*!40000 ALTER TABLE `m00_customers` DISABLE KEYS */;
-INSERT INTO `m00_customers` VALUES (57,'AAML','Arts Alliance Media Ltd'),(58,'ABCO','Askham Bryan College'),(59,'APTO','Apetito Limited'),(60,'BIFL','Bishop Fleming'),(61,'BLNW','Business Link Northwest'),(62,'BRCC','Bristol City Council'),(63,'CLNH','Clarendon House'),(64,'CLRH','Claire House'),(65,'CWNT','Chelsea & Westminster NHS Trust'),(66,'DIDA','DiData'),(67,'EDET','eDT'),(68,'EMSI','ems-Internet'),(69,'FANL','Fantasy League'),(70,'HRDS','Harrods Limited'),(71,'IKON','IKON'),(72,'IMJA','IMERJA Limited'),(73,'INVM','Invmo Limited'),(74,'ITRM','IT Resource Management'),(75,'KWBC','Knowsley Metropolitan Borough Council'),(76,'KWHT','Knowsley Housing Trust'),(77,'LBRE','London Borough of Redbridge'),(78,'LORO','London Overground Rail Operations Ltd'),(79,'MAFR','Manchester Fire and Rescue'),(80,'MPAY','MiPay'),(81,'MRCO','Medical Research Council'),(82,'NELC','North East Lincolnshire Council'),(83,'NOBI','Nobisco'),(84,'NWLG','North West Learning Grid'),(85,'OTWO','O2'),(86,'PTOP','Point to Point'),(87,'REDE','Retail Decisions'),(88,'RNLI','RNLI LifeBoat'),(89,'RWAL','Rockwood Additives Limited'),(90,'SABC','Salford MBC'),(91,'SDSO','Specialist Data Solutions'),(92,'SEBC','Sefton MBC'),(93,'STHC','St.Helens MBC'),(94,'SNTX','Synetrix'),(95,'SOUN','Southampton University'),(96,'SPEN','Sport England'),(97,'STAN','St Andrews'),(98,'SUDI','Supporter Direct'),(99,'SUHI','Sussex HIS'),(100,'TAPL','Talentplan / Clicks and Links'),(101,'TRHT','Trafford Housing Trust'),(102,'TOTE','Totesport'),(103,'UNPA','Unity Partnership'),(104,'VIME','Virgin Media'),(105,'VLTX','Vaultex UK'),(106,'WKBC','Wakefield Metopolitan District Council'),(107,'WRBC','Warrington Borough Council'),(108,'LAHC','Lancashire Health Community'),(109,'SELF','Selfridges Ltd');
+INSERT INTO `m00_customers` VALUES (57,'AAML','Arts Alliance Media Ltd'),(58,'ABCO','Askham Bryan College'),(59,'APTO','Apetito Limited'),(60,'BIFL','Bishop Fleming'),(61,'BLNW','Business Link Northwest'),(62,'BRCC','Bristol City Council'),(63,'CLNH','Clarendon House'),(64,'CLRH','Claire House'),(65,'CWNT','Chelsea & Westminster NHS Trust'),(66,'DIDA','DiData'),(67,'EDET','eDT'),(68,'EMSI','ems-Internet'),(69,'FANL','Fantasy League'),(70,'HRDS','Harrods Limited'),(71,'IKON','IKON'),(72,'IMJA','IMERJA Limited'),(73,'INVM','Invmo Limited'),(74,'ITRM','IT Resource Management'),(75,'KWBC','Knowsley Metropolitan Borough Council'),(76,'KWHT','Knowsley Housing Trust'),(77,'LBRE','London Borough of Redbridge'),(78,'LORO','London Overground Rail Operations Ltd'),(79,'MAFR','Manchester Fire and Rescue'),(80,'MPAY','MiPay'),(81,'MRCO','Medical Research Council'),(82,'NELC','North East Lincolnshire Council'),(83,'NOBI','Nobisco'),(84,'NWLG','North West Learning Grid'),(85,'OTWO','O2'),(86,'PTOP','Point to Point'),(87,'REDE','Retail Decisions'),(88,'RNLI','RNLI LifeBoat'),(89,'RWAL','Rockwood Additives Limited'),(90,'SABC','Salford MBC'),(91,'SDSO','Specialist Data Solutions'),(92,'SEBC','Sefton MBC'),(93,'STHC','St.Helens MBC'),(94,'SNTX','Synetrix'),(95,'SOUN','Southampton University'),(96,'SPEN','Sport England'),(97,'STAN','St Andrews'),(98,'SUDI','Supporter Direct'),(99,'SUHI','Sussex HIS'),(100,'TAPL','Talentplan / Clicks and Links'),(101,'TRHT','Trafford Housing Trust'),(102,'TOTE','Totesport'),(103,'UNPA','Unity Partnership'),(104,'VIME','Virgin Media'),(105,'VLTX','Vaultex UK'),(106,'WKBC','Wakefield Metopolitan District Council'),(107,'WRBC','Warrington Borough Council'),(108,'LAHC','Lancashire Health Community'),(109,'SELF','Selfridges Ltd'),(110,'STJP','St James Place');
 /*!40000 ALTER TABLE `m00_customers` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1622,11 +1694,11 @@ CREATE TABLE `m06_datasources` (
   `cdb_customer_id` int(10) unsigned NOT NULL,
   `source_server` varchar(45) NOT NULL,
   `source_app` varchar(45) NOT NULL,
-  `hourly_table` varchar(45) NOT NULL,
+  `target_table` varchar(45) NOT NULL,
   PRIMARY KEY  (`id`),
   KEY `FK_datasource_customer` USING BTREE (`cdb_customer_id`),
   CONSTRAINT `FK_datasource_customer` FOREIGN KEY (`cdb_customer_id`) REFERENCES `m00_customers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1635,7 +1707,7 @@ CREATE TABLE `m06_datasources` (
 
 LOCK TABLES `m06_datasources` WRITE;
 /*!40000 ALTER TABLE `m06_datasources` DISABLE KEYS */;
-INSERT INTO `m06_datasources` VALUES (1,108,'lancsman','rtg','hourly_data_lahc'),(2,108,'lancsman','rtg2','hourly_data_lahc'),(3,93,'sthman3','rtg','hourly_data_sthc'),(4,105,'vaultexman2','rtg','hourly_data_vltx'),(5,65,'chelseaman2','rtg','hourly_data_cwnt'),(6,93,'sthman3','nagevt','nagios_events_sthc'),(7,105,'vaultexman2','nagevt','nagios_events_vltx');
+INSERT INTO `m06_datasources` VALUES (1,108,'lancsman','rtg','hourly_data_lahc'),(2,108,'lancsman','rtg2','hourly_data_lahc'),(3,93,'sthman3','rtg','hourly_data_sthc'),(4,105,'vaultexman2','rtg','hourly_data_vltx'),(5,65,'chelseaman2','rtg','hourly_data_cwnt'),(6,93,'sthman3','nagevt','nagios_events_sthc'),(7,105,'vaultexman2','nagevt','nagios_events_vltx'),(8,97,'staman2','nagevt','nagios_events_stan');
 /*!40000 ALTER TABLE `m06_datasources` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

@@ -1,3 +1,7 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdc_rtg`.`cdc_refresh` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `cdc_refresh` ()
 BEGIN
 
 declare pn varchar(50) default 'cdc_refresh';
@@ -69,4 +73,6 @@ if rc > 0 then
 -- Log exit
 call cdc_logit( pn, 'Exit' );
 
-END
+END $$
+
+DELIMITER ;

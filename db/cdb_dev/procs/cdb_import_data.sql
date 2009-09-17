@@ -49,7 +49,7 @@ select count(*) from m06_datasources ds
  into rc;
 
 if rc = 1 then
-  select ds.id, ds.hourly_table from m06_datasources ds
+  select ds.id, ds.target_table from m06_datasources ds
    join m00_customers c on c.id = ds.cdb_customer_id
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into dsrcid, hourtab;

@@ -1,3 +1,0 @@
-
-        days_old int
-        

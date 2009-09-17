@@ -1,3 +1,10 @@
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS `cdc_rtg`.`cdc_export` $$
+CREATE DEFINER=`root`@`localhost` PROCEDURE `cdc_export` (
+        export_upto varchar(50),
+        days_before int
+        )
 BEGIN
 
 -- Declare variables and cursors
@@ -42,8 +49,8 @@ select prefix, hostname, export_dir from cdc_config into custpfx, hostnam, outdi
 
 -- Initialise filenames
 set filedat = date_format(now(),'%Y%m%d.%H%i%s');
-set datafil = concat(outdir,'/', custpfx, '.', hostnam, '.', filedat, '.data');
-set metafil = concat(outdir,'/', custpfx, '.', hostnam, '.', filedat, '.meta');
+set datafil = concat(outdir,'/', custpfx, '.', hostnam, '.rtg.', filedat, '.data');
+set metafil = concat(outdir,'/', custpfx, '.', hostnam, '.rtg.', filedat, '.meta');
 
 -- ------------------------
 --  Select data for export
@@ -96,4 +103,6 @@ if rc > 0 then
   call cdc_logit( pn, CONCAT( 'Exit. No new data to export' ) );
  end if;
 
-END
+END $$
+
+DELIMITER ;
