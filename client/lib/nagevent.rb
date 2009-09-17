@@ -1,3 +1,40 @@
+require "pp"
+
+# ------------------------------------------------
+#	A collection of Nagios Instances
+# ------------------------------------------------
+#
+class NagInstanceStore
+
+	def initialize()
+		@services = Array.new
+		@instances = Hash.new
+		@latest = Hash.new
+	end
+
+	def log_ts(item)
+		@latest[get_id(item)] = item.entrytime
+	end
+
+	def get_id(item)
+		if @instances.has_key?(item.svckey)
+			return @instances[item.svckey] 
+		 else
+			@services << [ item.host, item.service ]
+			@instances[item.svckey] = @services.size
+		 end
+	end
+
+	def save_instances(fn)
+		File.open(fn,"w") do |f| 
+			f.puts "Instid,Host,Service,LatestTime"
+			@services.each_index { |i|
+				f.puts "#{i+1},#{@services[i].join(',')},#{@latest[i+1]}" 
+				}
+		 end
+	end
+
+end
 
 # ------------------------------------------------
 #	A collection of Nagios Events
@@ -11,6 +48,8 @@ class NagEventStore
 		@events = Array.new
 		@openevents = Hash.new
 
+		@inst_store = NagInstanceStore.new
+
 		# Initialise stats
 		@statnewcalls = 0
 		@statcurrent = 0
@@ -23,6 +62,11 @@ class NagEventStore
 	#	Convert the log entry to an event
 	#
 	def process_log_entry(le)
+
+		# Record latest timestamp for each instance
+		# (This call creates an instance if it does not exist)
+		@inst_store.log_ts(le)
+	
 		if event_open?(le)
 			ev = find_event(le)
 			@statfoundopen += 1
@@ -37,6 +81,7 @@ class NagEventStore
 			# No open event, try to create one
 			new_event(le)
 		 end
+
 	end
 
 	def each
@@ -56,15 +101,24 @@ class NagEventStore
 	end
 
 	def dump_events
-		puts NagEvent.csvhdr
-		@events.each { |ev| puts ev.csv }
+		puts NagEvent.full_csvhdr
+		@events.each { |ev| puts ev.full_csv }
 	end
 
-	def save_events(filename)
-		File.open(filename,"w") do |f| 
-			f.puts NagEvent.csvhdr
-			@events.each { |ev| f.puts ev.csv }
+	# Save the stored events to a pair of files in CSV format
+	def save_events(filestem)
+
+		# Compose filenames for data export
+		metafile = "#{filestem}.meta"
+		datafile = "#{filestem}.data"
+
+		@inst_store.save_instances(metafile)
+
+		File.open(datafile,"w") do |f| 
+			f.puts "Instid,#{NagEvent.csvhdr}"
+			@events.each { |ev| f.puts "#{@inst_store.get_id(ev)},#{ev.csv}" }
 		 end
+
 	end
 
  private
@@ -75,18 +129,8 @@ class NagEventStore
 	def new_event(le)
 		@statnewcalls += 1
 
-		# If log entry state is OK, create an event only
-		# if it is a current host/service state entry
-		if le.stateOK?
-			if le.current_state?
-				# Open, then close, an Event in memory
-				ev = NagEvent.new(le)
-				ev.close(le)
-				@events << ev
-				@statcurrent += 1
-			 end
-			return 
-		 end
+		# Do nothing if log entry state is OK
+		return if le.stateOK?
 			
 		# Create new Event in memory
 		@events << NagEvent.new(le)
@@ -106,7 +150,6 @@ class NagEventStore
 		@openevents.delete(le.svckey)
 		@statclosed += 1
 	end
-
 
 	# Check for existing open event
 	#
@@ -147,18 +190,23 @@ class NagEvent
 		self	# return this object to allow method chaining
 	end
 
+	def self.full_csvhdr
+		"Host,Service," + csvhdr
+	end
+	
+	def full_csv
+		c  = "#@host,#@service," + csv
+	end
+
 	def self.csvhdr
-		c = "Host,Service,State,HardSoft,"
-		c += "StartTime,EndTime,Duration,"
+		c  = "State,HardSoft,StartTime,EndTime,Duration,"
 		c += "NextState,Reason,Message"
-		c
 	end
 	
 	def csv
-		c = "#@host,#@service,#@state,#@hardsoft,"
-		c += "#{showtime(@starttime)},#{showtime(@endtime)},#{@duration.nil? ? 'NULL' : @duration},"
+		c  = "#@state,#@hardsoft,#{showtime(@starttime)},"
+		c += "#{showtime(@endtime)},#{@duration.nil? ? 'NULL' : @duration},"
 		c += "#{@nextstate.nil? ? 'NULL' : @nextstate},#@reason,\"#@msg\""
-		c
 	end
 
 	def state_change?(le)

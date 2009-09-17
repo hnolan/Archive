@@ -61,11 +61,10 @@ unless File.directory?(destpath) and File.writable?(destpath)
   exit
  end
 
-# Build CSV filename
+# Build CSV filestem
 #
-csvtime = Time.new.strftime("%Y%m%d.%H%M%S") 
-csvfile = "#{prefix}.#{sysname}.nagevt.#{csvtime}.data"
-csvfull = File.join(destpath,csvfile)
+nowtime = Time.new.strftime("%Y%m%d.%H%M%S") 
+csvfull = File.join(destpath,"#{prefix}.#{sysname}.nagevt.#{nowtime}")
 
 #	Create the archive directory object 
 #

@@ -40,7 +40,7 @@ class NagArchLogDir
 		# Initialise containers
 		@alllogs = Array.new		
 		@newlogs = Hash.new		
-		@cache = NagArchLogCache.new("cache.txt",@dirname)
+		@cache = NagArchLogCache.new("archlogs.cache.txt",@dirname)
 		
 		# Compile a list of new log files
 		#
