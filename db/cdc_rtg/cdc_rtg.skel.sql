@@ -296,8 +296,8 @@ select prefix, hostname, export_dir from cdc_config into custpfx, hostnam, outdi
 
 -- Initialise filenames
 set filedat = date_format(now(),'%Y%m%d.%H%i%s');
-set datafil = concat(outdir,'/', custpfx, '.', hostnam, '.', filedat, '.data');
-set metafil = concat(outdir,'/', custpfx, '.', hostnam, '.', filedat, '.meta');
+set datafil = concat(outdir,'/', custpfx, '.', hostnam, '.rtg.', filedat, '.data');
+set metafil = concat(outdir,'/', custpfx, '.', hostnam, '.rtg.', filedat, '.meta');
 
 -- ------------------------
 --  Select data for export
