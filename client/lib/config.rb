@@ -1,13 +1,10 @@
 CONFIG = {
-	:prefix => 'STHC',
-	:sysname => 'sthman3',
+	:prefix => ENV['SA_PREFIX'] || 'XXXX',
+	:sysname => ENV['SA_SRCSRV'] || 'nohost',
 	:nag_export_events => {
-#		:logname => '~/logs/nag_export_events.log',
-#		:archivedir => '/usr/local/nagios/var/archives',
-#		:eventdir => '~/export/events',
-		:logname => STDOUT,
-		:archivedir => 'E:/Dev/TestData/NagLogs/Test',
-		:eventdir => 'E:/Dev/TestData/NagEvt',
-		:maxlogs => 10
+		:logname => '~/logs/nag_export_events.log',
+		:archivedir => '/usr/local/nagios/var/archives',
+		:eventdir => '~/export/events',
+		:maxlogs => 5
 		}
 	}
