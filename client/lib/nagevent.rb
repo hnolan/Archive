@@ -9,29 +9,33 @@ class NagInstanceStore
 	def initialize()
 		@services = Array.new
 		@instances = Hash.new
-		@latest = Hash.new
 	end
 
 	def log_ts(item)
-		@latest[get_id(item)] = item.entrytime
+		@services[inst_id(item)][3] = item.entrytime
 	end
 
 	def get_id(item)
-		if @instances.has_key?(item.svckey)
-			return @instances[item.svckey] 
-		 else
-			@services << [ item.host, item.service ]
-			@instances[item.svckey] = @services.size
-		 end
+		inst_id(item) + 1
 	end
 
 	def save_instances(fn)
 		File.open(fn,"w") do |f| 
-			f.puts "Instid,Host,Service,LatestTime"
+			f.puts "Instid,Host,Service,FirstTime,LatestTime"
 			@services.each_index { |i|
-				f.puts "#{i+1},#{@services[i].join(',')},#{@latest[i+1]}" 
+				f.puts "#{i+1},#{@services[i].join(',')}" 
 				}
 		 end
+	end
+
+ private
+
+	def inst_id(item)
+		unless @instances.has_key?(item.svckey)
+			@services << [ item.host, item.service, item.entrytime, item.entrytime ]
+			@instances[item.svckey] = @services.size - 1
+		 end
+		return @instances[item.svckey]
 	end
 
 end
