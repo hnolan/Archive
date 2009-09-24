@@ -330,7 +330,7 @@ class CdbImportDB
 			" ( sample_date, sample_hour, cdc_dataset_id, data_min, data_max, data_sum, data_count )"
 		 when 'tempin' :		
 			" fields terminated by ',' optionally enclosed by '\"' lines terminated by '\\r\\n'  ignore 1 lines " +
-			" ( svc_id, host, service, latest_event )"
+			" ( svc_id, host, service, first_status_time, latest_status_time )"
 		 when 'tempev' :		
 			" fields terminated by ',' optionally enclosed by '\"' lines terminated by '\\r\\n'  ignore 1 lines " +
  			" ( svc_id, ev_state, hard_soft, start_time, end_time, duration, next_state, entry_type, message )"
