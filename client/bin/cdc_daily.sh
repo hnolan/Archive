@@ -14,7 +14,7 @@ mysql -proc -u cdc cdc_rtg <${BINDIR}/cdc_daily.sql
 
 # Send export files to central server
 #
-rsync -rzv --remove-source-files --include=${PREFIX}\*ta --exclude \* ${EXPDIR}/ sm1::cdb
+rsync -rzv --remove-source-files --include=${SA_PREFIX}\*ta --exclude \* ${EXPDIR}/ sm1::cdb
 
 # That's it
 
