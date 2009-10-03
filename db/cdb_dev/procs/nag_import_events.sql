@@ -53,8 +53,8 @@ if rc = 1 then
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into dsrcid, eventtab;
  else
-  set msg = concat( 'Exit. *** Error - ', rc, ' datasources found ***' );
-  call cdb_logit( pn, msg );
+  set msg = concat( '*** Error - ', rc, ' datasources found ***' );
+  call cdb_logit( pn, concat( 'Exit. ', msg ) );
   select msg;
   leave main;
  end if;
@@ -62,64 +62,85 @@ if rc = 1 then
 -- ---------------------------
 -- Obtain instance lookup table
 -- ---------------------------
-create temporary table temp_instances like template_ev_inst;
 call nag_check_instances( p_prefix, p_srcsrv, p_srcapp );
 
 -- ---------------------------
--- Import data
+-- Discard duplicate data
 -- ---------------------------
 
-/*
+-- Discard events that already exist
+set @sql = concat( 'delete tempev t from tempev t join ', eventtab, ' e '  );
+set @sql = concat( @sql, '   on t.start_time = e.start_time and t.i_id = e.cdb_instance_id ' );
 
--- Delete duplicate data or unknown datasets
-delete from tempdt where cdb_dataset_id = 0;
-
-set @sql = concat( 'delete from tempdt dt using tempdt dt join ', hourtab, ' ht ' );
-set @sql = concat( @sql, '  on dt.cdb_dataset_id = ht.cdb_dataset_id and ht.sample_time = dt.sample_time' );
-
-prepare deldup from @sql;
-execute deldup;
-
-set rc = row_count();
-if rc > 0 then
-  call cdb_logit( pn, concat( 'Discarded ', rc, ' duplicate rows' ) );
- end if;
-
--- Get bounds for date range to limit search of existing table data
-select min(sample_date), max(date_add( sample_date, interval 1 day )) from tempdt into sd, ed;
-
--- ---------------------------
--- Import data
--- ---------------------------
-
--- Insert new mapped data
-set @sql = concat( 'insert into ', hourtab, ' ' );
-set @sql = concat( @sql, ' select sample_time, cdb_dataset_id, sample_date, sample_hour, ' );
-set @sql = concat( @sql, '   data_min, data_max, data_sum, data_count from tempdt' );
-
-prepare insnew from @sql;
-execute insnew;
+prepare dup from @sql;
+execute dup;
 
 set rc = row_count();
 
 -- Exit routine if no new data was found
-if rc = 0 then
-  call cdb_logit( pn, concat( 'Exit. No new data found' ) );
-  select concat( 'cdb_import_data: No new data found'  ) as msg;
-  leave main;
+if rc > 0 then
+  set msg = concat( 'Discarded ', rc, ' duplicate events' );
+  call cdb_logit( pn, concat( msg ) );
+  select msg;
  end if;
 
-*/
+
+-- -------------------------------
+-- Process CURRENT_x_STATE events
+-- -------------------------------
+
+-- Discard 'current' events if they already exist in the same state
+set @sql = concat( 'delete tempev t from tempev t join ', eventtab, ' e on t.i_id = e.cdb_instance_id ' );
+set @sql = concat( @sql, '  and t.ev_state = e.ev_state ' ); -- and t.hard_soft = e.hard_soft
+set @sql = concat( @sql, ' where t.entry_type in ( ''CURRENT HOST STATE'', ''CURRENT SERVICE STATE'' ) and e.end_time is null ' );
+set @sql = concat( @sql, '   and t.start_time >= e.start_time and t.end_time is null ' );
+
+prepare dup from @sql;
+execute dup;
+
+set rc = row_count();
+
+-- Exit routine if no new data was found
+if rc > 0 then
+  set msg = concat( 'Discarded ', rc, ' open but unchanged current state entries' );
+  call cdb_logit( pn, concat( msg ) );
+  select msg;
+ end if;
+
+-- Close any open events that match current states
+set @sql = concat( 'update ', eventtab, ' e join tempev t on t.i_id = e.cdb_instance_id ' );
+set @sql = concat( @sql, '  and t.ev_state = e.ev_state ' ); --  and t.hard_soft = e.hard_soft
+set @sql = concat( @sql, ' set t.svc_id = 0, e.end_time = t.end_time, e.next_state = t.next_state, ' );
+set @sql = concat( @sql, '   e.duration = timestampdiff(SECOND,e.start_time,t.end_time) ' );
+set @sql = concat( @sql, ' where t.entry_type in ( ''CURRENT HOST STATE'', ''CURRENT SERVICE STATE'' ) and e.end_time is null ' );
+set @sql = concat( @sql, '   and t.start_time >= e.start_time and t.end_time is not null ' );
+
+prepare upd from @sql;
+execute upd;
+
+set rc = row_count();
+
+-- Exit routine if no new data was found
+if rc > 0 then
+  -- rc is twice the no of events closed since an update was made to both tables
+  set rc = rc / 2;
+  set msg = concat( 'Closed ', rc, ' existing open events from current state entries' );
+  call cdb_logit( pn, concat( msg ) );
+  select msg;
+ end if;
+
+-- Discard the current state events that closed existing events
+delete from tempev where svc_id = 0;
 
 -- ---------------------------
+-- Import data
+-- ---------------------------
 
--- Insert new mapped data
--- ( We only want to store host/service alert records )
-set @sql = concat( 'insert into ', eventtab, ' ( cdb_instance_id, cdb_datasource_id, ev_state, hard_soft, start_time, end_time, duration, next_state, message )' );
-set @sql = concat( @sql, ' select ti.i_id, ', dsrcid, ', te.ev_state, te.hard_soft, te.start_time, te.end_time, te.duration, te.next_state, te.message ' );
-set @sql = concat( @sql, '  from tempev te join temp_instances ti on te.host = ti.cdb_machine and te.service = ti.cdb_instance ' );
-set @sql = concat( @sql, '   and ti.cdb_object = IF( reason = ''SERVICE ALERT'',  _latin1 ''NagiosServiceEvent'', _latin1 ''NagiosHostEvent'' ) ' );
-set @sql = concat( @sql, '  where te.reason = ''SERVICE ALERT'' or te.reason = ''HOST ALERT'' order by start_time ' );
+-- Insert new event data
+set @sql = concat( 'insert into ', eventtab, ' (start_time, cdb_instance_id, cdb_datasource_id, ' );
+set @sql = concat( @sql, '  end_time, duration, ev_state, hard_soft, next_state, entry_type, message) ' );
+set @sql = concat( @sql, ' select start_time, i_id, ', dsrcid, ', end_time, duration, ev_state, ' );
+set @sql = concat( @sql, '   hard_soft, next_state, entry_type, message  from tempev' );
 
 prepare imp from @sql;
 execute imp;
@@ -128,25 +149,17 @@ set rc = row_count();
 
 -- Exit routine if no new data was found
 if rc = 0 then
-  drop temporary table temp_instances;
-  set msg = concat( 'Exit. No new events found' );
-  call cdb_logit( pn, msg );
+  set msg = concat( 'No new events found' );
+  call cdb_logit( pn, concat( 'Exit. ', msg ) );
   select msg;
   leave main;
  end if;
 
--- ---------------------------------------
--- Update instance table with latest times
--- ---------------------------------------
-update m03_instances i join temp_instances ti on ti.i_id = i.id
- set i.latest_event = ti.latest_event;
-
--- Tidy up
-drop temporary table temp_instances;
-
 -- Log valid entry
-set msg = concat( 'Exit. Inserted ', rc, ' event rows into ', eventtab );
-call cdb_logit( pn, msg );
+set msg = concat( 'Inserted ', rc, ' event rows into ', eventtab );
+call cdb_logit( pn, concat( 'Exit. ', msg ) );
+
+-- Return a resultset consisting of the exit message
 select msg;
 
 -- End of main block

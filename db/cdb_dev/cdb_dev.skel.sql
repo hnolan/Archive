@@ -16,6 +16,139 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
+-- Table structure for table `cdb_counters`
+--
+
+DROP TABLE IF EXISTS `cdb_counters`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `cdb_counters` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `cdb_object_id` int(10) unsigned NOT NULL,
+  `counter_name` varchar(50) NOT NULL,
+  `is_percent` bit(1) NOT NULL default '\0',
+  `in_extract` bit(1) NOT NULL default '\0',
+  `created_at` datetime default NULL,
+  `updated_at` datetime default NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `idx_counter_name_unique` USING BTREE (`cdb_object_id`,`counter_name`),
+  CONSTRAINT `FK_counter_object` FOREIGN KEY (`cdb_object_id`) REFERENCES `cdb_objects` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `cdb_customers`
+--
+
+DROP TABLE IF EXISTS `cdb_customers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `cdb_customers` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `prefix` varchar(20) default NULL,
+  `customer_name` varchar(100) NOT NULL,
+  `created_at` datetime default NULL,
+  `updated_at` datetime default NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `IDX_prefix_unique` USING BTREE (`prefix`)
+) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `cdb_dataset_map`
+--
+
+DROP TABLE IF EXISTS `cdb_dataset_map`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `cdb_dataset_map` (
+  `cdb_datasource_id` int(10) unsigned NOT NULL,
+  `cdc_dataset_id` int(10) unsigned NOT NULL,
+  `cdb_dataset_id` int(10) unsigned NOT NULL,
+  PRIMARY KEY  USING BTREE (`cdb_datasource_id`,`cdc_dataset_id`),
+  KEY `FK_map_dataset` USING BTREE (`cdb_dataset_id`),
+  CONSTRAINT `FK_map_dataset` FOREIGN KEY (`cdb_dataset_id`) REFERENCES `cdb_datasets` (`id`),
+  CONSTRAINT `FK_map_datasource` FOREIGN KEY (`cdb_datasource_id`) REFERENCES `cdb_datasources` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `cdb_datasets`
+--
+
+DROP TABLE IF EXISTS `cdb_datasets`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `cdb_datasets` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `cdb_instance_id` int(10) unsigned NOT NULL,
+  `cdb_counter_id` int(10) unsigned NOT NULL,
+  `created_at` datetime NOT NULL default '2000-01-01 00:00:00',
+  `dt10_latest` datetime NOT NULL default '2000-01-01 00:00:00',
+  `dt20_latest` datetime NOT NULL default '2000-01-01 00:00:00',
+  `dt30_latest` datetime NOT NULL default '2000-01-01 00:00:00',
+  `dt40_latest` datetime NOT NULL default '2000-01-01 00:00:00',
+  `dt50_latest` datetime NOT NULL default '2000-01-01 00:00:00',
+  `cdb_prefix` varchar(20) default NULL,
+  `cdb_path` varchar(250) default NULL,
+  `updated_at` datetime default NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `IDX_dataset_unique` USING BTREE (`cdb_instance_id`,`cdb_counter_id`),
+  UNIQUE KEY `IDX_dataset_path_unique` (`cdb_prefix`,`cdb_path`),
+  KEY `FK_dataset_counter` USING BTREE (`cdb_counter_id`),
+  CONSTRAINT `FK_dataset_counter` FOREIGN KEY (`cdb_counter_id`) REFERENCES `cdb_counters` (`id`),
+  CONSTRAINT `FK_dataset_instance` FOREIGN KEY (`cdb_instance_id`) REFERENCES `cdb_instances` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=16329 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `cdb_datasources`
+--
+
+DROP TABLE IF EXISTS `cdb_datasources`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `cdb_datasources` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `cdb_customer_id` int(10) unsigned NOT NULL,
+  `source_server` varchar(45) NOT NULL,
+  `source_app` varchar(45) NOT NULL,
+  `target_table` varchar(45) NOT NULL,
+  `created_at` datetime default NULL,
+  `updated_at` datetime default NULL,
+  PRIMARY KEY  (`id`),
+  KEY `FK_datasource_customer` USING BTREE (`cdb_customer_id`),
+  CONSTRAINT `FK_datasource_customer` FOREIGN KEY (`cdb_customer_id`) REFERENCES `cdb_customers` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `cdb_instances`
+--
+
+DROP TABLE IF EXISTS `cdb_instances`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `cdb_instances` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `cdb_machine_id` int(10) unsigned NOT NULL,
+  `cdb_object_id` int(10) unsigned NOT NULL,
+  `instance_name` varchar(250) default NULL,
+  `parent_name` varchar(50) default NULL,
+  `instance_index` varchar(50) default NULL,
+  `first_status_time` datetime default NULL,
+  `latest_status_time` datetime default NULL,
+  `created_at` datetime default NULL,
+  `updated_at` datetime default NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `idx_instance_name_unique` USING BTREE (`cdb_machine_id`,`cdb_object_id`,`instance_name`),
+  KEY `FK_instance_object` USING BTREE (`cdb_object_id`),
+  CONSTRAINT `FK_instance_machine` FOREIGN KEY (`cdb_machine_id`) REFERENCES `cdb_machines` (`id`),
+  CONSTRAINT `FK_instance_object` FOREIGN KEY (`cdb_object_id`) REFERENCES `cdb_objects` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3045 DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `cdb_log`
 --
 
@@ -28,7 +161,47 @@ CREATE TABLE `cdb_log` (
   `pn` varchar(80) default NULL,
   `txt` varchar(1024) default NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=687 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=122 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `cdb_machines`
+--
+
+DROP TABLE IF EXISTS `cdb_machines`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `cdb_machines` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `cdb_customer_id` int(10) unsigned NOT NULL,
+  `machine_name` varchar(100) NOT NULL,
+  `machine_type` varchar(50) NOT NULL default 'unknown',
+  `subtype` varchar(50) NOT NULL default 'unknown',
+  `created_at` datetime default NULL,
+  `updated_at` datetime default NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `idx_machine_name_unique` USING BTREE (`cdb_customer_id`,`machine_name`),
+  CONSTRAINT `FK_machine_customer` FOREIGN KEY (`cdb_customer_id`) REFERENCES `cdb_customers` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=688 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `cdb_objects`
+--
+
+DROP TABLE IF EXISTS `cdb_objects`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `cdb_objects` (
+  `id` int(10) unsigned NOT NULL auto_increment,
+  `object_name` varchar(50) NOT NULL,
+  `type` varchar(50) default NULL,
+  `subsystem` varchar(50) default NULL,
+  `created_at` datetime default NULL,
+  `updated_at` datetime default NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `idx_object_name_unique` USING BTREE (`object_name`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -38,12 +211,12 @@ CREATE TABLE `cdb_log` (
 DROP TABLE IF EXISTS `dataset_details`;
 /*!50001 DROP VIEW IF EXISTS `dataset_details`*/;
 /*!50001 CREATE TABLE `dataset_details` (
-  `dataset_id` int(10) unsigned,
-  `prefix` varchar(20),
-  `machine` varchar(50),
-  `object` varchar(50),
-  `instance` varchar(250),
-  `counter` varchar(50)
+  `cdb_dataset_id` int(10) unsigned,
+  `cdb_prefix` varchar(20),
+  `cdb_machine` varchar(100),
+  `cdb_object` varchar(50),
+  `cdb_instance` varchar(250),
+  `cdb_counter` varchar(50)
 ) ENGINE=MyISAM */;
 
 --
@@ -62,9 +235,11 @@ CREATE TABLE `dt15_nagios_events` (
   `ev_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') NOT NULL,
   `hard_soft` enum('HARD','SOFT') NOT NULL,
   `next_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') default NULL,
+  `entry_type` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
   `message` varchar(512) NOT NULL,
-  PRIMARY KEY  (`start_time`,`cdb_instance_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+  PRIMARY KEY  (`start_time`,`cdb_instance_id`),
+  KEY `IDX_end_time` (`end_time`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -84,7 +259,7 @@ CREATE TABLE `dt20_hourly_data` (
   `data_sum` float NOT NULL,
   `data_count` int(10) unsigned NOT NULL,
   PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -106,7 +281,7 @@ CREATE TABLE `dt30_daily_data` (
   `sample_month` int(10) unsigned NOT NULL,
   `sample_year` int(10) unsigned NOT NULL,
   PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`,`cdb_shift_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -121,8 +296,8 @@ DROP TABLE IF EXISTS `event_instances`;
   `o_id` int(10) unsigned,
   `i_id` int(10) unsigned,
   `cdb_prefix` varchar(20),
-  `cdb_customer` varchar(50),
-  `cdb_machine` varchar(50),
+  `cdb_customer` varchar(100),
+  `cdb_machine` varchar(100),
   `cdb_object` varchar(50),
   `cdb_instance` varchar(250)
 ) ENGINE=MyISAM */;
@@ -144,7 +319,7 @@ CREATE TABLE `hourly_data_cwnt` (
   `data_sum` float NOT NULL,
   `data_count` int(10) unsigned NOT NULL,
   PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -164,7 +339,7 @@ CREATE TABLE `hourly_data_lahc` (
   `data_sum` float NOT NULL,
   `data_count` int(10) unsigned NOT NULL,
   PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -184,7 +359,7 @@ CREATE TABLE `hourly_data_sthc` (
   `data_sum` float NOT NULL,
   `data_count` int(10) unsigned NOT NULL,
   PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -204,166 +379,7 @@ CREATE TABLE `hourly_data_vltx` (
   `data_sum` float NOT NULL,
   `data_count` int(10) unsigned NOT NULL,
   PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `m00_customers`
---
-
-DROP TABLE IF EXISTS `m00_customers`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m00_customers` (
-  `id` int(10) unsigned NOT NULL auto_increment,
-  `prefix` varchar(20) default NULL,
-  `fullname` varchar(50) default NULL,
-  PRIMARY KEY  (`id`),
-  UNIQUE KEY `IDX_prefix_unique` USING BTREE (`prefix`)
-) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `m01_machines`
---
-
-DROP TABLE IF EXISTS `m01_machines`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m01_machines` (
-  `id` int(10) unsigned NOT NULL auto_increment,
-  `cdb_customer_id` int(10) unsigned NOT NULL,
-  `name` varchar(50) NOT NULL,
-  `machine_type` varchar(50) NOT NULL default 'unknown',
-  `subtype` varchar(50) NOT NULL default 'unknown',
-  PRIMARY KEY  (`id`),
-  UNIQUE KEY `IDX_machine_name_unique` USING BTREE (`cdb_customer_id`,`name`),
-  CONSTRAINT `FK_machine_customer` FOREIGN KEY (`cdb_customer_id`) REFERENCES `m00_customers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=369 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `m02_objects`
---
-
-DROP TABLE IF EXISTS `m02_objects`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m02_objects` (
-  `id` int(10) unsigned NOT NULL auto_increment,
-  `name` varchar(50) NOT NULL,
-  `type` varchar(50) default NULL,
-  `subsystem` varchar(50) default NULL,
-  PRIMARY KEY  (`id`),
-  UNIQUE KEY `IDX_object_name_unique` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `m03_instances`
---
-
-DROP TABLE IF EXISTS `m03_instances`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m03_instances` (
-  `id` int(10) unsigned NOT NULL auto_increment,
-  `cdb_machine_id` int(10) unsigned NOT NULL,
-  `cdb_object_id` int(10) unsigned NOT NULL,
-  `name` varchar(250) default NULL,
-  `parent_name` varchar(50) default NULL,
-  `instance_index` varchar(50) default NULL,
-  `latest_event` datetime default NULL,
-  PRIMARY KEY  (`id`),
-  UNIQUE KEY `IDX_instance_name_unique` USING BTREE (`cdb_machine_id`,`cdb_object_id`,`name`),
-  KEY `FK_instance_object` USING BTREE (`cdb_object_id`),
-  CONSTRAINT `FK_instance_machine` FOREIGN KEY (`cdb_machine_id`) REFERENCES `m01_machines` (`id`),
-  CONSTRAINT `FK_instance_object` FOREIGN KEY (`cdb_object_id`) REFERENCES `m02_objects` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1813 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `m04_counters`
---
-
-DROP TABLE IF EXISTS `m04_counters`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m04_counters` (
-  `id` int(10) unsigned NOT NULL auto_increment,
-  `cdb_object_id` int(10) unsigned NOT NULL,
-  `name` varchar(50) NOT NULL,
-  `is_percent` bit(1) NOT NULL default '\0',
-  `in_extract` bit(1) NOT NULL default '\0',
-  PRIMARY KEY  (`id`),
-  UNIQUE KEY `IDX_counter_name_unique` USING BTREE (`cdb_object_id`,`name`),
-  CONSTRAINT `FK_counter_object` FOREIGN KEY (`cdb_object_id`) REFERENCES `m02_objects` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `m05_datasets`
---
-
-DROP TABLE IF EXISTS `m05_datasets`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m05_datasets` (
-  `id` int(10) unsigned NOT NULL auto_increment,
-  `cdb_instance_id` int(10) unsigned NOT NULL,
-  `cdb_counter_id` int(10) unsigned NOT NULL,
-  `created_on` datetime NOT NULL default '2000-01-01 00:00:00',
-  `dt10_latest` datetime NOT NULL default '2000-01-01 00:00:00',
-  `dt20_latest` datetime NOT NULL default '2000-01-01 00:00:00',
-  `dt30_latest` datetime NOT NULL default '2000-01-01 00:00:00',
-  `dt40_latest` datetime NOT NULL default '2000-01-01 00:00:00',
-  `dt50_latest` datetime NOT NULL default '2000-01-01 00:00:00',
-  `cdb_prefix` varchar(20) default NULL,
-  `cdb_path` varchar(256) default NULL,
-  PRIMARY KEY  (`id`),
-  UNIQUE KEY `IDX_dataset_unique` USING BTREE (`cdb_instance_id`,`cdb_counter_id`),
-  UNIQUE KEY `IDX_dataset_path_unique` (`cdb_prefix`,`cdb_path`),
-  KEY `FK_dataset_counter` USING BTREE (`cdb_counter_id`),
-  CONSTRAINT `FK_dataset_counter` FOREIGN KEY (`cdb_counter_id`) REFERENCES `m04_counters` (`id`),
-  CONSTRAINT `FK_dataset_instance` FOREIGN KEY (`cdb_instance_id`) REFERENCES `m03_instances` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=16329 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `m06_datasources`
---
-
-DROP TABLE IF EXISTS `m06_datasources`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m06_datasources` (
-  `id` int(10) unsigned NOT NULL auto_increment,
-  `cdb_customer_id` int(10) unsigned NOT NULL,
-  `source_server` varchar(45) NOT NULL,
-  `source_app` varchar(45) NOT NULL,
-  `target_table` varchar(45) NOT NULL,
-  PRIMARY KEY  (`id`),
-  KEY `FK_datasource_customer` USING BTREE (`cdb_customer_id`),
-  CONSTRAINT `FK_datasource_customer` FOREIGN KEY (`cdb_customer_id`) REFERENCES `m00_customers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `m07_dataset_map`
---
-
-DROP TABLE IF EXISTS `m07_dataset_map`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m07_dataset_map` (
-  `cdb_datasource_id` int(10) unsigned NOT NULL,
-  `cdc_dataset_id` int(10) unsigned NOT NULL,
-  `cdb_dataset_id` int(10) unsigned NOT NULL,
-  PRIMARY KEY  USING BTREE (`cdb_datasource_id`,`cdc_dataset_id`),
-  KEY `FK_map_dataset` USING BTREE (`cdb_dataset_id`),
-  CONSTRAINT `FK_map_dataset` FOREIGN KEY (`cdb_dataset_id`) REFERENCES `m05_datasets` (`id`),
-  CONSTRAINT `FK_map_datasource` FOREIGN KEY (`cdb_datasource_id`) REFERENCES `m06_datasources` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -382,9 +398,11 @@ CREATE TABLE `nagios_events_stan` (
   `ev_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') NOT NULL,
   `hard_soft` enum('HARD','SOFT') NOT NULL,
   `next_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') default NULL,
+  `entry_type` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
   `message` varchar(512) NOT NULL,
-  PRIMARY KEY  (`start_time`,`cdb_instance_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+  PRIMARY KEY  (`start_time`,`cdb_instance_id`),
+  KEY `IDX_end_time` (`end_time`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -403,9 +421,11 @@ CREATE TABLE `nagios_events_sthc` (
   `ev_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') NOT NULL,
   `hard_soft` enum('HARD','SOFT') NOT NULL,
   `next_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') default NULL,
+  `entry_type` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
   `message` varchar(512) NOT NULL,
-  PRIMARY KEY  (`start_time`,`cdb_instance_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+  PRIMARY KEY  (`start_time`,`cdb_instance_id`),
+  KEY `IDX_end_time` (`end_time`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -424,8 +444,24 @@ CREATE TABLE `nagios_events_vltx` (
   `ev_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') NOT NULL,
   `hard_soft` enum('HARD','SOFT') NOT NULL,
   `next_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') default NULL,
+  `entry_type` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
   `message` varchar(512) NOT NULL,
-  PRIMARY KEY  (`start_time`,`cdb_instance_id`)
+  PRIMARY KEY  (`start_time`,`cdb_instance_id`),
+  KEY `IDX_end_time` (`end_time`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `t1`
+--
+
+DROP TABLE IF EXISTS `t1`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `t1` (
+  `i_id` int(10) unsigned NOT NULL,
+  `min_start` datetime,
+  `next_start` datetime
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -444,7 +480,7 @@ CREATE TABLE `template_ds` (
   `cdc_counter` varchar(45) NOT NULL,
   `speed` bigint(20) unsigned NOT NULL,
   `description` varchar(250) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -464,7 +500,7 @@ CREATE TABLE `template_dt` (
   `data_count` int(10) unsigned NOT NULL,
   `sample_time` datetime default NULL,
   `cdb_dataset_id` int(10) unsigned NOT NULL default '0'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -475,36 +511,50 @@ DROP TABLE IF EXISTS `template_ev`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `template_ev` (
-  `host` varchar(100) NOT NULL,
-  `service` varchar(100) default NULL,
-  `ev_state` enum('UP','DOWN','UNKNOWN','OK','WARNING','CRITICAL') NOT NULL,
+  `i_id` int(10) unsigned default '0',
+  `svc_id` int(10) unsigned NOT NULL,
+  `ev_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') NOT NULL,
   `hard_soft` enum('HARD','SOFT') NOT NULL,
   `start_time` datetime NOT NULL,
-  `end_time` datetime default '0000-00-00 00:00:00',
-  `duration` int(10) unsigned default '0',
-  `next_state` enum('UP','DOWN','UNKNOWN','OK','WARNING','CRITICAL') default NULL,
-  `reason` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
-  `message` varchar(512) NOT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 ROW_FORMAT=DYNAMIC;
+  `end_time` datetime default NULL,
+  `duration` int(10) unsigned default NULL,
+  `next_state` enum('UP','DOWN','UNREACHABLE','OK','WARNING','CRITICAL','UNKNOWN') default NULL,
+  `entry_type` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
+  `message` varchar(512) NOT NULL,
+  KEY `IDX_svc_id` (`svc_id`),
+  KEY `IDX_entry_type` (`entry_type`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `template_ev_inst`
+-- Table structure for table `template_in`
 --
 
-DROP TABLE IF EXISTS `template_ev_inst`;
+DROP TABLE IF EXISTS `template_in`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `template_ev_inst` (
-  `i_id` int(10) unsigned default '0',
+CREATE TABLE `template_in` (
+  `i_id` int(10) unsigned NOT NULL default '0',
   `m_id` int(10) unsigned NOT NULL default '0',
   `o_id` int(10) unsigned NOT NULL default '0',
-  `cdb_machine` varchar(100) NOT NULL,
-  `cdb_object` varchar(18) NOT NULL default '',
-  `cdb_instance` varchar(100) default NULL,
-  `nag_event_type` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
-  `latest_event` datetime default NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+  `svc_id` int(10) unsigned NOT NULL,
+  `host` varchar(100) NOT NULL,
+  `service` varchar(100) NOT NULL,
+  `first_status_time` datetime default NULL,
+  `latest_status_time` datetime default NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `test1`
+--
+
+DROP TABLE IF EXISTS `test1`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `test1` (
+  `i_id` int(10) unsigned NOT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -791,7 +841,7 @@ END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `cdb_create_datasource` */;;
 /*!50003 SET SESSION SQL_MODE=""*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `cdb_create_datasource`(
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `cdb_create_datasource`(
         p_prefix varchar(10),
         p_srcsrv varchar(50),
         p_srcapp varchar(50)
@@ -802,7 +852,7 @@ BEGIN
 main: BEGIN
 
 -- Declare variables and cursors
-declare pn varchar(50) default 'cdb_add_datasource';
+declare pn varchar(50) default 'cdb_create_datasource';
 declare rc integer default 0;
 declare dsrcid integer default 0;
 declare tabnam varchar(50);
@@ -1150,6 +1200,33 @@ END main;
 
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `event_info` */;;
+/*!50003 SET SESSION SQL_MODE=""*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `event_info`(
+        p_prefix varchar(10),
+        p_start datetime,
+        p_end datetime
+        )
+BEGIN
+
+declare p_total int;
+set p_total = TIMESTAMPDIFF(SECOND,p_start,p_end);
+
+select entry_type,
+ count(*), sum( TIMESTAMPDIFF( SECOND,
+ CASE when start_time < p_start then p_start else start_time END,
+ CASE when end_time is null then p_end when end_time > p_end then p_end else end_time END
+ )) dur,
+ 100 * sum( TIMESTAMPDIFF( SECOND,
+ CASE when start_time < p_start then p_start else start_time END,
+ CASE when end_time is null then p_end when end_time > p_end then p_end else end_time END
+ )) / p_total as '% dur'
+ from nagios_events_sthc e
+ where e.start_time < p_end and ( end_time > p_start or end_time is null )
+ group by entry_type;
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `lsr` */;;
 /*!50003 SET SESSION SQL_MODE="STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER"*/;;
 /*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `lsr`()
@@ -1159,7 +1236,7 @@ END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `nag_check_instances` */;;
 /*!50003 SET SESSION SQL_MODE=""*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `nag_check_instances`(
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `nag_check_instances`(
         p_prefix varchar(10),
         p_srcsrv varchar(45),
         p_srcapp varchar(45)
@@ -1168,22 +1245,17 @@ BEGIN
 
 /*
 
-This procedure scans the raw events in the input table and produces
-an output table which maps the host, service and reason (event type)
-fields on to instances ids which are subsequently used to store the
-event data.
-
 The procedure creates new machine and instance records as required.
 
-Input table: tempev
+Input table: tempin
 
 The table is expected to exist with at least the following columns:
 
+  `svc_id` varchar(100) NOT NULL,
   `host` varchar(100) NOT NULL,
   `service` varchar(100) default NULL,
-  `start_time` datetime NOT NULL,
-  `end_time` datetime default '0000-00-00 00:00:00',
-  `reason` enum('CURRENT HOST STATE','CURRENT SERVICE STATE','HOST ALERT','SERVICE ALERT') NOT NULL,
+  `first_status_time` datetime NOT NULL,
+  `latest_status_time` datetime  NOT NULL
 
 Any other columns are ignored.
 
@@ -1194,6 +1266,7 @@ main: BEGIN
 
 -- Declare variables and cursors
 declare pn varchar(50) default 'nag_check_instances';
+declare msg varchar(250) default '';
 declare rc integer default 0;
 declare mrc integer default 0;
 declare irc integer default 0;
@@ -1215,7 +1288,9 @@ if rc = 1 then
    into dsrcid, custid;
  else
   call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp, ' )' ) );
-  call cdb_logit( pn, concat( 'Exit. *** Error - ', rc, ' datasources found ***' ) );
+  set msg = concat( '*** Error - ', rc, ' datasources found ***' );
+  call cdb_logit( pn, concat( 'Exit. ', msg ) );
+  select msg;
   leave main;
  end if;
 
@@ -1224,7 +1299,7 @@ if rc = 1 then
 -- ---------------------------------------
 insert into m01_machines ( cdb_customer_id, name )
  select custid, t.host
-  from ( select distinct host from tempev ) t
+  from ( select distinct host from tempin ) t
  where t.host not in ( select name from m01_machines m where m.cdb_customer_id = custid );
 
 set mrc = row_count();
@@ -1232,35 +1307,29 @@ set mrc = row_count();
 -- Report machine creation, if any were found
 if mrc > 0 then
   call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp, ' )' ) );
-  call cdb_logit( pn, concat( mrc, ' new machines created' ) );
+  set msg = concat( mrc, ' new machines created, ' );
  end if;
 
--- ---------------------------------------
--- Populate temporary table to hold
---  instance details for lookup
--- ---------------------------------------
-insert into temp_instances ( i_id, m_id, o_id, cdb_machine, cdb_object, cdb_instance, nag_event_type, latest_event )
-select i.id as i_id, m.id as m_id, o.id as o_id, ni.* from (
- select host as cdb_machine,
-  case
-   when reason like '%HOST%' then _latin1 'NagiosHostEvent'
-   when reason like '%SERVICE%' then _latin1 'NagiosServiceEvent'
-   else _latin1 'NagiosOtherEvent'
-   end as cdb_object,
-  service as cdb_instance, reason as nag_event_type, IFNULL( max(end_time), max(start_time) ) as latest_event
-  from tempev group by host, service order by host, service
- ) ni
-  join m01_machines m on m.name = ni.cdb_machine
-  join m02_objects o on o.name = ni.cdb_object
-  left join m03_instances i on i.cdb_machine_id = m.id and i.cdb_object_id = o.id and i.name = ni.cdb_instance
- where m.cdb_customer_id = custid;
+-- Populate tempin with machine IDs
+update tempin t join m01_machines m
+ on m.name = t.host and m.cdb_customer_id = custid
+ set t.m_id = m.id;
 
 -- ---------------------------------------
---  Create any new instances
+-- Populate tempin with object IDs
 -- ---------------------------------------
-insert into m03_instances ( cdb_machine_id, cdb_object_id, name, latest_event )
- select m_id, o_id, cdb_instance, latest_event from temp_instances
-  where i_id IS NULL;
+update tempin t join m02_objects o
+ on o.name = IF(service= _latin1 '', _latin1 'NagiosHostEvent', _latin1 'NagiosServiceEvent')
+ set t.o_id = o.id;
+
+-- ---------------------------------------
+ -- Create entries for all new Instances
+-- ---------------------------------------
+insert into m03_instances ( cdb_machine_id, cdb_object_id, name, first_status_time, latest_status_time )
+ select t.m_id, t.o_id, t.service, t.first_status_time, t.latest_status_time
+ from tempin t where t.service not in (
+  select name from m03_instances where cdb_machine_id = t.m_id and cdb_object_id = t.o_id
+  );
 
 set irc = row_count();
 
@@ -1269,22 +1338,28 @@ if irc > 0 then
 
   if mrc = 0 then
     call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp, ' )' ) );
-    call cdb_logit( pn, concat( mrc, ' new machines created' ) );
    end if;
 
-  call cdb_logit( pn, concat( irc, ' new instances created' ) );
-
-  -- Update temp table with new instance ids
-  update temp_instances ti join m03_instances i
-    on ti.m_id = i.cdb_machine_id and ti.o_id = i.cdb_object_id and ti.cdb_instance = i.name
-   set ti.i_id = i.id;
+  set msg = concat( msg, irc, ' new instances created.' );
 
   end if;
 
--- select * from temp_instances;
+-- Populate tempin with instance IDs
+update tempin t join m03_instances i
+  on t.m_id = i.cdb_machine_id and t.o_id = i.cdb_object_id and t.service = i.name
+ set t.i_id = i.id;
 
-if mrc > 0 or irc > 0 then
-  call cdb_logit( pn, concat( 'Exit' ) );
+-- Update tempev with Instance IDs
+update tempev e join tempin i on e.svc_id = i.svc_id
+ set e.i_id = i.i_id;
+
+-- Update instance table with latest times
+update m03_instances i join tempin t on t.i_id = i.id
+ set i.latest_status_time = t.latest_status_time;
+
+if msg <> '' then
+  call cdb_logit( pn, concat( 'Exit. ', msg ) );
+  select msg;
  end if;
 
 END main;
@@ -1293,7 +1368,7 @@ END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `nag_import_events` */;;
 /*!50003 SET SESSION SQL_MODE=""*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `nag_import_events`(
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `nag_import_events`(
         p_prefix varchar(10),
         p_srcsrv varchar(45),
         p_srcapp varchar(45)
@@ -1345,8 +1420,8 @@ if rc = 1 then
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into dsrcid, eventtab;
  else
-  set msg = concat( 'Exit. *** Error - ', rc, ' datasources found ***' );
-  call cdb_logit( pn, msg );
+  set msg = concat( '*** Error - ', rc, ' datasources found ***' );
+  call cdb_logit( pn, concat( 'Exit. ', msg ) );
   select msg;
   leave main;
  end if;
@@ -1354,64 +1429,85 @@ if rc = 1 then
 -- ---------------------------
 -- Obtain instance lookup table
 -- ---------------------------
-create temporary table temp_instances like template_ev_inst;
 call nag_check_instances( p_prefix, p_srcsrv, p_srcapp );
 
 -- ---------------------------
--- Import data
+-- Discard duplicate data
 -- ---------------------------
 
-/*
+-- Discard events that already exist
+set @sql = concat( 'delete tempev t from tempev t join ', eventtab, ' e '  );
+set @sql = concat( @sql, '   on t.start_time = e.start_time and t.i_id = e.cdb_instance_id ' );
 
--- Delete duplicate data or unknown datasets
-delete from tempdt where cdb_dataset_id = 0;
-
-set @sql = concat( 'delete from tempdt dt using tempdt dt join ', hourtab, ' ht ' );
-set @sql = concat( @sql, '  on dt.cdb_dataset_id = ht.cdb_dataset_id and ht.sample_time = dt.sample_time' );
-
-prepare deldup from @sql;
-execute deldup;
-
-set rc = row_count();
-if rc > 0 then
-  call cdb_logit( pn, concat( 'Discarded ', rc, ' duplicate rows' ) );
- end if;
-
--- Get bounds for date range to limit search of existing table data
-select min(sample_date), max(date_add( sample_date, interval 1 day )) from tempdt into sd, ed;
-
--- ---------------------------
--- Import data
--- ---------------------------
-
--- Insert new mapped data
-set @sql = concat( 'insert into ', hourtab, ' ' );
-set @sql = concat( @sql, ' select sample_time, cdb_dataset_id, sample_date, sample_hour, ' );
-set @sql = concat( @sql, '   data_min, data_max, data_sum, data_count from tempdt' );
-
-prepare insnew from @sql;
-execute insnew;
+prepare dup from @sql;
+execute dup;
 
 set rc = row_count();
 
 -- Exit routine if no new data was found
-if rc = 0 then
-  call cdb_logit( pn, concat( 'Exit. No new data found' ) );
-  select concat( 'cdb_import_data: No new data found'  ) as msg;
-  leave main;
+if rc > 0 then
+  set msg = concat( 'Discarded ', rc, ' duplicate events' );
+  call cdb_logit( pn, concat( msg ) );
+  select msg;
  end if;
 
-*/
+
+-- -------------------------------
+-- Process CURRENT_x_STATE events
+-- -------------------------------
+
+-- Discard 'current' events if they already exist in the same state
+set @sql = concat( 'delete tempev t from tempev t join ', eventtab, ' e on t.i_id = e.cdb_instance_id ' );
+set @sql = concat( @sql, '  and t.ev_state = e.ev_state ' ); -- and t.hard_soft = e.hard_soft
+set @sql = concat( @sql, ' where t.entry_type in ( ''CURRENT HOST STATE'', ''CURRENT SERVICE STATE'' ) and e.end_time is null ' );
+set @sql = concat( @sql, '   and t.start_time >= e.start_time and t.end_time is null ' );
+
+prepare dup from @sql;
+execute dup;
+
+set rc = row_count();
+
+-- Exit routine if no new data was found
+if rc > 0 then
+  set msg = concat( 'Discarded ', rc, ' open but unchanged current state entries' );
+  call cdb_logit( pn, concat( msg ) );
+  select msg;
+ end if;
+
+-- Close any open events that match current states
+set @sql = concat( 'update ', eventtab, ' e join tempev t on t.i_id = e.cdb_instance_id ' );
+set @sql = concat( @sql, '  and t.ev_state = e.ev_state ' ); --  and t.hard_soft = e.hard_soft
+set @sql = concat( @sql, ' set t.svc_id = 0, e.end_time = t.end_time, e.next_state = t.next_state, ' );
+set @sql = concat( @sql, '   e.duration = timestampdiff(SECOND,e.start_time,t.end_time) ' );
+set @sql = concat( @sql, ' where t.entry_type in ( ''CURRENT HOST STATE'', ''CURRENT SERVICE STATE'' ) and e.end_time is null ' );
+set @sql = concat( @sql, '   and t.start_time >= e.start_time and t.end_time is not null ' );
+
+prepare upd from @sql;
+execute upd;
+
+set rc = row_count();
+
+-- Exit routine if no new data was found
+if rc > 0 then
+  -- rc is twice the no of events closed since an update was made to both tables
+  set rc = rc / 2;
+  set msg = concat( 'Closed ', rc, ' existing open events from current state entries' );
+  call cdb_logit( pn, concat( msg ) );
+  select msg;
+ end if;
+
+-- Discard the current state events that closed existing events
+delete from tempev where svc_id = 0;
 
 -- ---------------------------
+-- Import data
+-- ---------------------------
 
--- Insert new mapped data
--- ( We only want to store host/service alert records )
-set @sql = concat( 'insert into ', eventtab, ' ( cdb_instance_id, cdb_datasource_id, ev_state, hard_soft, start_time, end_time, duration, next_state, message )' );
-set @sql = concat( @sql, ' select ti.i_id, ', dsrcid, ', te.ev_state, te.hard_soft, te.start_time, te.end_time, te.duration, te.next_state, te.message ' );
-set @sql = concat( @sql, '  from tempev te join temp_instances ti on te.host = ti.cdb_machine and te.service = ti.cdb_instance ' );
-set @sql = concat( @sql, '   and ti.cdb_object = IF( reason = ''SERVICE ALERT'',  _latin1 ''NagiosServiceEvent'', _latin1 ''NagiosHostEvent'' ) ' );
-set @sql = concat( @sql, '  where te.reason = ''SERVICE ALERT'' or te.reason = ''HOST ALERT'' order by start_time ' );
+-- Insert new event data
+set @sql = concat( 'insert into ', eventtab, ' (start_time, cdb_instance_id, cdb_datasource_id, ' );
+set @sql = concat( @sql, '  end_time, duration, ev_state, hard_soft, next_state, entry_type, message) ' );
+set @sql = concat( @sql, ' select start_time, i_id, ', dsrcid, ', end_time, duration, ev_state, ' );
+set @sql = concat( @sql, '   hard_soft, next_state, entry_type, message  from tempev' );
 
 prepare imp from @sql;
 execute imp;
@@ -1420,25 +1516,17 @@ set rc = row_count();
 
 -- Exit routine if no new data was found
 if rc = 0 then
-  drop temporary table temp_instances;
-  set msg = concat( 'Exit. No new events found' );
-  call cdb_logit( pn, msg );
+  set msg = concat( 'No new events found' );
+  call cdb_logit( pn, concat( 'Exit. ', msg ) );
   select msg;
   leave main;
  end if;
 
--- ---------------------------------------
--- Update instance table with latest times
--- ---------------------------------------
-update m03_instances i join temp_instances ti on ti.i_id = i.id
- set i.latest_event = ti.latest_event;
-
--- Tidy up
-drop temporary table temp_instances;
-
 -- Log valid entry
-set msg = concat( 'Exit. Inserted ', rc, ' event rows into ', eventtab );
-call cdb_logit( pn, msg );
+set msg = concat( 'Inserted ', rc, ' event rows into ', eventtab );
+call cdb_logit( pn, concat( 'Exit. ', msg ) );
+
+-- Return a resultset consisting of the exit message
 select msg;
 
 -- End of main block
@@ -1589,8 +1677,8 @@ DELIMITER ;
 /*!50001 DROP TABLE `dataset_details`*/;
 /*!50001 DROP VIEW IF EXISTS `dataset_details`*/;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`root`@`%` SQL SECURITY DEFINER */
-/*!50001 VIEW `dataset_details` AS select `m5`.`id` AS `dataset_id`,`m0`.`prefix` AS `prefix`,`m1`.`name` AS `machine`,`m2`.`name` AS `object`,`m3`.`name` AS `instance`,`m4`.`name` AS `counter` from (((((`m05_datasets` `m5` join `m04_counters` `m4` on((`m4`.`id` = `m5`.`cdb_counter_id`))) join `m03_instances` `m3` on((`m3`.`id` = `m5`.`cdb_instance_id`))) join `m02_objects` `m2` on((`m2`.`id` = `m3`.`cdb_object_id`))) join `m01_machines` `m1` on((`m1`.`id` = `m3`.`cdb_machine_id`))) join `m00_customers` `m0` on((`m0`.`id` = `m1`.`cdb_customer_id`))) */;
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `dataset_details` AS select `m5`.`id` AS `cdb_dataset_id`,`m0`.`prefix` AS `cdb_prefix`,`m1`.`machine_name` AS `cdb_machine`,`m2`.`object_name` AS `cdb_object`,`m3`.`instance_name` AS `cdb_instance`,`m4`.`counter_name` AS `cdb_counter` from (((((`cdb_datasets` `m5` join `cdb_counters` `m4` on((`m4`.`id` = `m5`.`cdb_counter_id`))) join `cdb_instances` `m3` on((`m3`.`id` = `m5`.`cdb_instance_id`))) join `cdb_objects` `m2` on((`m2`.`id` = `m3`.`cdb_object_id`))) join `cdb_machines` `m1` on((`m1`.`id` = `m3`.`cdb_machine_id`))) join `cdb_customers` `m0` on((`m0`.`id` = `m1`.`cdb_customer_id`))) */;
 
 --
 -- Final view structure for view `event_instances`
@@ -1599,8 +1687,8 @@ DELIMITER ;
 /*!50001 DROP TABLE `event_instances`*/;
 /*!50001 DROP VIEW IF EXISTS `event_instances`*/;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`root`@`%` SQL SECURITY DEFINER */
-/*!50001 VIEW `event_instances` AS select `c`.`id` AS `c_id`,`m`.`id` AS `m_id`,`o`.`id` AS `o_id`,`i`.`id` AS `i_id`,`c`.`prefix` AS `cdb_prefix`,`c`.`fullname` AS `cdb_customer`,`m`.`name` AS `cdb_machine`,`o`.`name` AS `cdb_object`,`i`.`name` AS `cdb_instance` from (((`m00_customers` `c` join `m01_machines` `m` on((`c`.`id` = `m`.`cdb_customer_id`))) join `m03_instances` `i` on((`i`.`cdb_machine_id` = `m`.`id`))) join `m02_objects` `o` on((`o`.`id` = `i`.`cdb_object_id`))) where (`o`.`type` = _latin1'event') */;
+/*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
+/*!50001 VIEW `event_instances` AS select `c`.`id` AS `c_id`,`m`.`id` AS `m_id`,`o`.`id` AS `o_id`,`i`.`id` AS `i_id`,`c`.`prefix` AS `cdb_prefix`,`c`.`customer_name` AS `cdb_customer`,`m`.`machine_name` AS `cdb_machine`,`o`.`object_name` AS `cdb_object`,`i`.`instance_name` AS `cdb_instance` from (((`cdb_customers` `c` join `cdb_machines` `m` on((`c`.`id` = `m`.`cdb_customer_id`))) join `cdb_instances` `i` on((`i`.`cdb_machine_id` = `m`.`id`))) join `cdb_objects` `o` on((`o`.`id` = `i`.`cdb_object_id`))) where (`o`.`type` = _utf8'event') */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -1630,85 +1718,91 @@ DELIMITER ;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Table structure for table `m00_customers`
+-- Table structure for table `cdb_customers`
 --
 
-DROP TABLE IF EXISTS `m00_customers`;
+DROP TABLE IF EXISTS `cdb_customers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m00_customers` (
+CREATE TABLE `cdb_customers` (
   `id` int(10) unsigned NOT NULL auto_increment,
   `prefix` varchar(20) default NULL,
-  `fullname` varchar(50) default NULL,
+  `customer_name` varchar(100) NOT NULL,
+  `created_at` datetime default NULL,
+  `updated_at` datetime default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `IDX_prefix_unique` USING BTREE (`prefix`)
-) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=111 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `m00_customers`
+-- Dumping data for table `cdb_customers`
 --
 
-LOCK TABLES `m00_customers` WRITE;
-/*!40000 ALTER TABLE `m00_customers` DISABLE KEYS */;
-INSERT INTO `m00_customers` VALUES (57,'AAML','Arts Alliance Media Ltd'),(58,'ABCO','Askham Bryan College'),(59,'APTO','Apetito Limited'),(60,'BIFL','Bishop Fleming'),(61,'BLNW','Business Link Northwest'),(62,'BRCC','Bristol City Council'),(63,'CLNH','Clarendon House'),(64,'CLRH','Claire House'),(65,'CWNT','Chelsea & Westminster NHS Trust'),(66,'DIDA','DiData'),(67,'EDET','eDT'),(68,'EMSI','ems-Internet'),(69,'FANL','Fantasy League'),(70,'HRDS','Harrods Limited'),(71,'IKON','IKON'),(72,'IMJA','IMERJA Limited'),(73,'INVM','Invmo Limited'),(74,'ITRM','IT Resource Management'),(75,'KWBC','Knowsley Metropolitan Borough Council'),(76,'KWHT','Knowsley Housing Trust'),(77,'LBRE','London Borough of Redbridge'),(78,'LORO','London Overground Rail Operations Ltd'),(79,'MAFR','Manchester Fire and Rescue'),(80,'MPAY','MiPay'),(81,'MRCO','Medical Research Council'),(82,'NELC','North East Lincolnshire Council'),(83,'NOBI','Nobisco'),(84,'NWLG','North West Learning Grid'),(85,'OTWO','O2'),(86,'PTOP','Point to Point'),(87,'REDE','Retail Decisions'),(88,'RNLI','RNLI LifeBoat'),(89,'RWAL','Rockwood Additives Limited'),(90,'SABC','Salford MBC'),(91,'SDSO','Specialist Data Solutions'),(92,'SEBC','Sefton MBC'),(93,'STHC','St.Helens MBC'),(94,'SNTX','Synetrix'),(95,'SOUN','Southampton University'),(96,'SPEN','Sport England'),(97,'STAN','St Andrews'),(98,'SUDI','Supporter Direct'),(99,'SUHI','Sussex HIS'),(100,'TAPL','Talentplan / Clicks and Links'),(101,'TRHT','Trafford Housing Trust'),(102,'TOTE','Totesport'),(103,'UNPA','Unity Partnership'),(104,'VIME','Virgin Media'),(105,'VLTX','Vaultex UK'),(106,'WKBC','Wakefield Metopolitan District Council'),(107,'WRBC','Warrington Borough Council'),(108,'LAHC','Lancashire Health Community'),(109,'SELF','Selfridges Ltd'),(110,'STJP','St James Place');
-/*!40000 ALTER TABLE `m00_customers` ENABLE KEYS */;
+LOCK TABLES `cdb_customers` WRITE;
+/*!40000 ALTER TABLE `cdb_customers` DISABLE KEYS */;
+INSERT INTO `cdb_customers` VALUES (57,'AAML','Arts Alliance Media Ltd',NULL,NULL),(58,'ABCO','Askham Bryan College',NULL,NULL),(59,'APTO','Apetito Limited',NULL,NULL),(60,'BIFL','Bishop Fleming',NULL,NULL),(61,'BLNW','Business Link Northwest',NULL,NULL),(62,'BRCC','Bristol City Council',NULL,NULL),(63,'CLNH','Clarendon House',NULL,NULL),(64,'CLRH','Claire House',NULL,NULL),(65,'CWNT','Chelsea & Westminster NHS Trust',NULL,NULL),(66,'DIDA','DiData',NULL,NULL),(67,'EDET','eDT',NULL,NULL),(68,'EMSI','ems-Internet',NULL,NULL),(69,'FANL','Fantasy League',NULL,NULL),(70,'HRDS','Harrods Limited',NULL,NULL),(71,'IKON','IKON',NULL,NULL),(72,'IMJA','IMERJA Limited',NULL,NULL),(73,'INVM','Invmo Limited',NULL,NULL),(74,'ITRM','IT Resource Management',NULL,NULL),(75,'KWBC','Knowsley Metropolitan Borough Council',NULL,NULL),(76,'KWHT','Knowsley Housing Trust',NULL,NULL),(77,'LBRE','London Borough of Redbridge',NULL,NULL),(78,'LORO','London Overground Rail Operations Ltd',NULL,NULL),(79,'MAFR','Manchester Fire and Rescue',NULL,NULL),(80,'MPAY','MiPay',NULL,NULL),(81,'MRCO','Medical Research Council',NULL,NULL),(82,'NELC','North East Lincolnshire Council',NULL,NULL),(83,'NOBI','Nobisco',NULL,NULL),(84,'NWLG','North West Learning Grid',NULL,NULL),(85,'OTWO','O2',NULL,NULL),(86,'PTOP','Point to Point',NULL,NULL),(87,'REDE','Retail Decisions',NULL,NULL),(88,'RNLI','RNLI LifeBoat',NULL,NULL),(89,'RWAL','Rockwood Additives Limited',NULL,NULL),(90,'SABC','Salford MBC',NULL,NULL),(91,'SDSO','Specialist Data Solutions',NULL,NULL),(92,'SEBC','Sefton MBC',NULL,NULL),(93,'STHC','St.Helens MBC',NULL,NULL),(94,'SNTX','Synetrix',NULL,NULL),(95,'SOUN','Southampton University',NULL,NULL),(96,'SPEN','Sport England',NULL,NULL),(97,'STAN','St Andrews',NULL,NULL),(98,'SUDI','Supporter Direct',NULL,NULL),(99,'SUHI','Sussex HIS',NULL,NULL),(100,'TAPL','Talentplan / Clicks and Links',NULL,NULL),(101,'TRHT','Trafford Housing Trust',NULL,NULL),(102,'TOTE','Totesport',NULL,NULL),(103,'UNPA','Unity Partnership',NULL,NULL),(104,'VIME','Virgin Media',NULL,NULL),(105,'VLTX','Vaultex UK',NULL,NULL),(106,'WKBC','Wakefield Metopolitan District Council',NULL,NULL),(107,'WRBC','Warrington Borough Council',NULL,NULL),(108,'LAHC','Lancashire Health Community',NULL,NULL),(109,'SELF','Selfridges Ltd',NULL,NULL),(110,'STJP','St James Place',NULL,NULL);
+/*!40000 ALTER TABLE `cdb_customers` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
--- Table structure for table `m02_objects`
+-- Table structure for table `cdb_objects`
 --
 
-DROP TABLE IF EXISTS `m02_objects`;
+DROP TABLE IF EXISTS `cdb_objects`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m02_objects` (
+CREATE TABLE `cdb_objects` (
   `id` int(10) unsigned NOT NULL auto_increment,
-  `name` varchar(50) NOT NULL,
+  `object_name` varchar(50) NOT NULL,
   `type` varchar(50) default NULL,
   `subsystem` varchar(50) default NULL,
+  `created_at` datetime default NULL,
+  `updated_at` datetime default NULL,
   PRIMARY KEY  (`id`),
-  UNIQUE KEY `IDX_object_name_unique` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+  UNIQUE KEY `idx_object_name_unique` USING BTREE (`object_name`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `m02_objects`
+-- Dumping data for table `cdb_objects`
 --
 
-LOCK TABLES `m02_objects` WRITE;
-/*!40000 ALTER TABLE `m02_objects` DISABLE KEYS */;
-INSERT INTO `m02_objects` VALUES (1,'Interface','capacity',NULL),(2,'NagiosHostEvent','event',NULL),(3,'NagiosServiceEvent','event',NULL),(4,'NagiosOtherEvent','event',NULL);
-/*!40000 ALTER TABLE `m02_objects` ENABLE KEYS */;
+LOCK TABLES `cdb_objects` WRITE;
+/*!40000 ALTER TABLE `cdb_objects` DISABLE KEYS */;
+INSERT INTO `cdb_objects` VALUES (1,'Interface','capacity',NULL,NULL,NULL),(2,'NagiosHostEvent','event',NULL,NULL,NULL),(3,'NagiosServiceEvent','event',NULL,NULL,NULL),(4,'NagiosOtherEvent','event',NULL,NULL,NULL);
+/*!40000 ALTER TABLE `cdb_objects` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
--- Table structure for table `m06_datasources`
+-- Table structure for table `cdb_datasources`
 --
 
-DROP TABLE IF EXISTS `m06_datasources`;
+DROP TABLE IF EXISTS `cdb_datasources`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `m06_datasources` (
+CREATE TABLE `cdb_datasources` (
   `id` int(10) unsigned NOT NULL auto_increment,
   `cdb_customer_id` int(10) unsigned NOT NULL,
   `source_server` varchar(45) NOT NULL,
   `source_app` varchar(45) NOT NULL,
   `target_table` varchar(45) NOT NULL,
+  `created_at` datetime default NULL,
+  `updated_at` datetime default NULL,
   PRIMARY KEY  (`id`),
   KEY `FK_datasource_customer` USING BTREE (`cdb_customer_id`),
-  CONSTRAINT `FK_datasource_customer` FOREIGN KEY (`cdb_customer_id`) REFERENCES `m00_customers` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+  CONSTRAINT `FK_datasource_customer` FOREIGN KEY (`cdb_customer_id`) REFERENCES `cdb_customers` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `m06_datasources`
+-- Dumping data for table `cdb_datasources`
 --
 
-LOCK TABLES `m06_datasources` WRITE;
-/*!40000 ALTER TABLE `m06_datasources` DISABLE KEYS */;
-INSERT INTO `m06_datasources` VALUES (1,108,'lancsman','rtg','hourly_data_lahc'),(2,108,'lancsman','rtg2','hourly_data_lahc'),(3,93,'sthman3','rtg','hourly_data_sthc'),(4,105,'vaultexman2','rtg','hourly_data_vltx'),(5,65,'chelseaman2','rtg','hourly_data_cwnt'),(6,93,'sthman3','nagevt','nagios_events_sthc'),(7,105,'vaultexman2','nagevt','nagios_events_vltx'),(8,97,'staman2','nagevt','nagios_events_stan');
-/*!40000 ALTER TABLE `m06_datasources` ENABLE KEYS */;
+LOCK TABLES `cdb_datasources` WRITE;
+/*!40000 ALTER TABLE `cdb_datasources` DISABLE KEYS */;
+INSERT INTO `cdb_datasources` VALUES (1,108,'lancsman','rtg','hourly_data_lahc',NULL,NULL),(2,108,'lancsman','rtg2','hourly_data_lahc',NULL,NULL),(3,93,'sthman3','rtg','hourly_data_sthc',NULL,NULL),(4,105,'vaultexman2','rtg','hourly_data_vltx',NULL,NULL),(5,65,'chelseaman2','rtg','hourly_data_cwnt',NULL,NULL),(6,93,'sthman3','nagevt','nagios_events_sthc',NULL,NULL),(7,105,'vaultexman2','nagevt','nagios_events_vltx',NULL,NULL),(8,97,'staman2','nagevt','nagios_events_stan',NULL,NULL);
+/*!40000 ALTER TABLE `cdb_datasources` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 

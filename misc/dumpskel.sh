@@ -7,7 +7,7 @@ DB=cdb_dev
 DUMPFIL=${CWD}/db/${DB}/${DB}.skel.sql
 
 mysqldump -p$PWD -u root ${DB} --no-data --routines --skip-dump-date >$DUMPFIL
-mysqldump -p$PWD -u root ${DB} m00_customers m02_objects m06_datasources --skip-dump-date >>$DUMPFIL
+mysqldump -p$PWD -u root ${DB} cdb_customers cdb_objects cdb_datasources --skip-dump-date >>$DUMPFIL
 dos2unix $DUMPFIL
 
 # ---------------------------------------------------

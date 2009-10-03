@@ -12,7 +12,7 @@ BEGIN
 main: BEGIN
 
 -- Declare variables and cursors
-declare pn varchar(50) default 'cdb_add_datasource';
+declare pn varchar(50) default 'cdb_create_datasource';
 declare rc integer default 0;
 declare dsrcid integer default 0;
 declare tabnam varchar(50);
