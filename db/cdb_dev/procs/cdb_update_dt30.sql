@@ -36,7 +36,7 @@ declare sd datetime;
 declare ed datetime;
 
 -- Get list of data table prefixes (each prefix that has a datasource)
-declare tabcur cursor for select distinct prefix from m00_customers m0 join m06_datasources m6 on m0.id = m6.cdb_customer_id;
+declare tabcur cursor for select distinct prefix from cdb_customers m0 join cdb_datasources m6 on m0.id = m6.cdb_customer_id;
 declare continue handler for not found set done = 1;
 
 if update_upto = '' then
@@ -69,7 +69,7 @@ create temporary table temp_data (
   data_sum float NOT NULL,
   data_count int(10) unsigned NOT NULL,
   sample_dow int
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 open tabcur;
 -- Get first row from cursor
@@ -83,7 +83,7 @@ repeat
 
   set @sql = 'insert into temp_data ';
   set @sql = CONCAT( @sql, 'select dt.*, dayofweek(dt.sample_date) as sample_dow from hourly_data_', lower(pfx), ' dt ' );
-  set @sql = CONCAT( @sql, '   inner join m05_datasets d on dt.cdb_dataset_id = d.id ' );
+  set @sql = CONCAT( @sql, '   inner join cdb_datasets d on dt.cdb_dataset_id = d.id ' );
   set @sql = CONCAT( @sql, '  where dt.sample_date > d.dt30_latest and dt.sample_time < date(d.dt20_latest) ' );
   set @sql = CONCAT( @sql, '    and dt.sample_time between ''', sd, ''' and ''', ed, '''; ' );
 
@@ -147,9 +147,9 @@ if rc > 0 then
   call cdb_logit( pn, concat( rc, ' daily data rows inserted (shift 2)' ) );
  end if;
 
--- update latest dates in m05_datasets
+-- update latest dates in cdb_datasets
 if rcnew > 0 then
-  update m05_datasets ds join (
+  update cdb_datasets ds join (
    select cdb_dataset_id, max(sample_time) as 'latest' from dt30_daily_data group by cdb_dataset_id
    ) as t on ds.id = t.cdb_dataset_id
   set ds.dt30_latest=t.latest;

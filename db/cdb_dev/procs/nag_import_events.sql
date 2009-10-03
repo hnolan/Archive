@@ -42,14 +42,14 @@ call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp
 -- ---------------------------
 
 -- Check that a unique datasource exists
-select count(*) from m06_datasources ds
- join m00_customers c on c.id = ds.cdb_customer_id
+select count(*) from cdb_datasources ds
+ join cdb_customers c on c.id = ds.cdb_customer_id
  where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
  into rc;
 
 if rc = 1 then
-  select ds.id, ds.target_table from m06_datasources ds
-   join m00_customers c on c.id = ds.cdb_customer_id
+  select ds.id, ds.target_table from cdb_datasources ds
+   join cdb_customers c on c.id = ds.cdb_customer_id
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into dsrcid, eventtab;
  else

@@ -21,17 +21,17 @@ declare pfxid int;
 call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp, ' )' ) );
 
 -- Check for prefix
-select count(*) from m00_customers where prefix = p_prefix into rc;
+select count(*) from cdb_customers where prefix = p_prefix into rc;
 
 if rc = 1 then
-  select id from m00_customers where prefix = p_prefix into pfxid;
+  select id from cdb_customers where prefix = p_prefix into pfxid;
  else
   call cdb_logit( pn, concat( 'Exit. *** Error - customer not found ***' ) );
   leave main;
  end if;
 
 -- Check whether the datasource already exists
-select count(*) from m06_datasources ds join m00_customers c on c.id = ds.cdb_customer_id
+select count(*) from cdb_datasources ds join cdb_customers c on c.id = ds.cdb_customer_id
  where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
  into rc;
 
@@ -54,7 +54,7 @@ prepare nt from @sql;
 execute nt;
 
 -- Create new datasource
-set @sql = concat( 'insert into m06_datasources ( cdb_customer_id, source_server, source_app, target_table ) ' );
+set @sql = concat( 'insert into cdb_datasources ( cdb_customer_id, source_server, source_app, target_table ) ' );
 set @sql = concat( @sql, ' values ( ', pfxid, ', ''', p_srcsrv, ''', ''', p_srcapp, ''', ''', tabnam, ''' );' );
 prepare nd from @sql;
 execute nd;

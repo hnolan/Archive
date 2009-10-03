@@ -41,14 +41,14 @@ declare custid integer default 0;
 -- ---------------------------------------
 -- Check that a unique datasource exists
 -- ---------------------------------------
-select count(*) from m06_datasources ds
- join m00_customers c on c.id = ds.cdb_customer_id
+select count(*) from cdb_datasources ds
+ join cdb_customers c on c.id = ds.cdb_customer_id
  where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
  into rc;
 
 if rc = 1 then
-  select ds.id, ds.cdb_customer_id from m06_datasources ds
-   join m00_customers c on c.id = ds.cdb_customer_id
+  select ds.id, ds.cdb_customer_id from cdb_datasources ds
+   join cdb_customers c on c.id = ds.cdb_customer_id
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into dsrcid, custid;
  else
@@ -62,10 +62,10 @@ if rc = 1 then
 -- ---------------------------------------
 --  Create machines from any new hosts
 -- ---------------------------------------
-insert into m01_machines ( cdb_customer_id, name )
+insert into cdb_machines ( cdb_customer_id, machine_name )
  select custid, t.host
   from ( select distinct host from tempin ) t
- where t.host not in ( select name from m01_machines m where m.cdb_customer_id = custid );
+ where t.host not in ( select machine_name from cdb_machines m where m.cdb_customer_id = custid );
 
 set mrc = row_count();
 
@@ -76,24 +76,24 @@ if mrc > 0 then
  end if;
 
 -- Populate tempin with machine IDs
-update tempin t join m01_machines m
- on m.name = t.host and m.cdb_customer_id = custid
+update tempin t join cdb_machines m
+ on m.machine_name = t.host and m.cdb_customer_id = custid
  set t.m_id = m.id;
 
 -- ---------------------------------------
 -- Populate tempin with object IDs
 -- ---------------------------------------
-update tempin t join m02_objects o
- on o.name = IF(service= _latin1 '', _latin1 'NagiosHostEvent', _latin1 'NagiosServiceEvent')
+update tempin t join cdb_objects o
+ on o.object_name = IF(service= _utf8 '', _utf8 'NagiosHostEvent', _utf8 'NagiosServiceEvent')
  set t.o_id = o.id;
 
 -- ---------------------------------------
  -- Create entries for all new Instances
 -- ---------------------------------------
-insert into m03_instances ( cdb_machine_id, cdb_object_id, name, first_status_time, latest_status_time )
+insert into cdb_instances ( cdb_machine_id, cdb_object_id, instance_name, first_status_time, latest_status_time )
  select t.m_id, t.o_id, t.service, t.first_status_time, t.latest_status_time
  from tempin t where t.service not in (
-  select name from m03_instances where cdb_machine_id = t.m_id and cdb_object_id = t.o_id
+  select instance_name from cdb_instances where cdb_machine_id = t.m_id and cdb_object_id = t.o_id
   );
 
 set irc = row_count();
@@ -110,8 +110,8 @@ if irc > 0 then
   end if;
 
 -- Populate tempin with instance IDs
-update tempin t join m03_instances i
-  on t.m_id = i.cdb_machine_id and t.o_id = i.cdb_object_id and t.service = i.name
+update tempin t join cdb_instances i
+  on t.m_id = i.cdb_machine_id and t.o_id = i.cdb_object_id and t.service = i.instance_name
  set t.i_id = i.id;
 
 -- Update tempev with Instance IDs
@@ -119,7 +119,7 @@ update tempev e join tempin i on e.svc_id = i.svc_id
  set e.i_id = i.i_id;
 
 -- Update instance table with latest times
-update m03_instances i join tempin t on t.i_id = i.id
+update cdb_instances i join tempin t on t.i_id = i.id
  set i.latest_status_time = t.latest_status_time;
 
 if msg <> '' then

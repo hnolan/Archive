@@ -31,24 +31,24 @@ declare rc integer default 0;
 declare dsrcid integer default 0;
 
 -- Check whether a unique datasource exists
-select count(*) from m06_datasources ds
- join m00_customers c on c.id = ds.cdb_customer_id
+select count(*) from cdb_datasources ds
+ join cdb_customers c on c.id = ds.cdb_customer_id
  where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
  into rc;
 
 -- Create datasource if one was not found
 if rc = 0 then
   call cdb_create_datasource( p_prefix, p_srcsrv, p_srcapp );
-  select count(*) from m06_datasources ds
-   join m00_customers c on c.id = ds.cdb_customer_id
+  select count(*) from cdb_datasources ds
+   join cdb_customers c on c.id = ds.cdb_customer_id
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into rc;
  end if;
 
 -- Double check for valid datasource
 if rc = 1 then
-  select ds.id from m06_datasources ds
-   join m00_customers c on c.id = ds.cdb_customer_id
+  select ds.id from cdb_datasources ds
+   join cdb_customers c on c.id = ds.cdb_customer_id
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into dsrcid;
  else
@@ -60,7 +60,7 @@ if rc = 1 then
 -- Check for unmapped datasets
 select count(*) from tempds tds
  where cdc_dataset_id not in (
-   select cdc_dataset_id from m07_dataset_map where cdb_datasource_id = dsrcid
+   select cdc_dataset_id from cdb_dataset_map where cdb_datasource_id = dsrcid
    )
  into rc;
 
@@ -81,21 +81,21 @@ create temporary table if not exists temp_datasets (
   cdc_instance varchar(50) NOT NULL,
   cdc_counter varchar(50) NOT NULL,
   cdc_path varchar(512) NOT NULL
-  ) DEFAULT CHARSET=latin1
+  ) DEFAULT CHARSET=utf8
   select cdc_dataset_id, p_prefix as cdc_prefix, cdc_machine, cdc_object, cdc_instance, cdc_counter,
-	convert( concat( '\\\\', cdc_machine, '\\', cdc_object, '(', cdc_instance, ')\\', cdc_counter ) using latin1 ) AS cdc_path
+	convert( concat( '\\\\', cdc_machine, '\\', cdc_object, '(', cdc_instance, ')\\', cdc_counter ) using utf8 ) AS cdc_path
  from tempds tds where cdc_dataset_id not in (
-  select cdc_dataset_id from m07_dataset_map where cdb_datasource_id = dsrcid
+  select cdc_dataset_id from cdb_dataset_map where cdb_datasource_id = dsrcid
   );
 
 -- select * from temp_datasets;
 call cdb_create_datasets();
 
 -- Update Map table with new dataset mappings
-insert into m07_dataset_map ( cdb_datasource_id, cdc_dataset_id, cdb_dataset_id )
+insert into cdb_dataset_map ( cdb_datasource_id, cdc_dataset_id, cdb_dataset_id )
   select dsrcid, t.cdc_dataset_id, d.id
     from temp_datasets t
-     join m05_datasets d on t.cdc_prefix = d.cdb_prefix and t.cdc_path = d.cdb_path;
+     join cdb_datasets d on t.cdc_prefix = d.cdb_prefix and t.cdc_path = d.cdb_path;
 
 set rc = row_count();
 

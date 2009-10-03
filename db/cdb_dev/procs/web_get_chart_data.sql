@@ -45,15 +45,15 @@ create temporary table TempDatasets (
 if p_seltype = 'Machine' then
   -- Machine selected
   insert into TempDatasets ( dataset_id, prefix, selection, series )
-   select dd.dataset_id, dd.prefix, dd.counter as selection, dd.instance as series
+   select dd.cdb_dataset_id, dd.cdb_prefix, dd.cdb_counter as selection, dd.cdb_instance as series
     from dataset_details dd
-   where dd.prefix = p_prefix and dd.machine = p_selection;
+   where dd.cdb_prefix = p_prefix and dd.cdb_machine = p_selection;
  else
   -- Counter selected
   insert into TempDatasets ( dataset_id, prefix, selection, series )
-   select dd.dataset_id, dd.prefix, dd.machine as selection, dd.instance as series
+   select dd.cdb_dataset_id, dd.cdb_prefix, dd.cdb_machine as selection, dd.cdb_instance as series
     from dataset_details dd
-   where dd.prefix = p_prefix and dd.counter = p_selection;
+   where dd.cdb_prefix = p_prefix and dd.cdb_counter = p_selection;
  end if;
 
 -- select * from TempDatasets;

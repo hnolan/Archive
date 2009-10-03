@@ -43,14 +43,14 @@ call cdb_logit( pn, concat( 'Enter ( ', p_prefix, ', ', p_srcsrv, ', ', p_srcapp
 -- ---------------------------
 
 -- Check that a unique datasource exists
-select count(*) from m06_datasources ds
- join m00_customers c on c.id = ds.cdb_customer_id
+select count(*) from cdb_datasources ds
+ join cdb_customers c on c.id = ds.cdb_customer_id
  where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
  into rc;
 
 if rc = 1 then
-  select ds.id, ds.target_table from m06_datasources ds
-   join m00_customers c on c.id = ds.cdb_customer_id
+  select ds.id, ds.target_table from cdb_datasources ds
+   join cdb_customers c on c.id = ds.cdb_customer_id
    where c.prefix = p_prefix and ds.source_server = p_srcsrv and ds.source_app = p_srcapp
    into dsrcid, hourtab;
  else
@@ -59,7 +59,7 @@ if rc = 1 then
  end if;
 
 -- Populate new columns
-update tempdt dt join m07_dataset_map dm
+update tempdt dt join cdb_dataset_map dm
  on dt.cdc_dataset_id = dm.cdc_dataset_id and dm.cdb_datasource_id = dsrcid
   set dt.cdb_dataset_id = dm.cdb_dataset_id,
       dt.sample_time = date_add(dt.sample_date, interval dt.sample_hour hour );
@@ -102,8 +102,8 @@ if rc = 0 then
   leave main;
  end if;
 
--- update latest times in m05_datasets
-set @sql = concat( 'update m05_datasets ds join ( ' );
+-- update latest times in cdb_datasets
+set @sql = concat( 'update cdb_datasets ds join ( ' );
 set @sql = concat( @sql, '  select cdb_dataset_id, max(sample_time) as ''latest'' from ', hourtab, ' ' );
 set @sql = concat( @sql, '   where sample_time between ''', sd, ''' and ''', ed, ''' group by cdb_dataset_id ' );
 set @sql = concat( @sql, '   ) as t on ds.id = t.cdb_dataset_id set ds.dt20_latest=t.latest; ' );
