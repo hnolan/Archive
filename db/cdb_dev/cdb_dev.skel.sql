@@ -452,20 +452,6 @@ CREATE TABLE `nagios_events_vltx` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `t1`
---
-
-DROP TABLE IF EXISTS `t1`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `t1` (
-  `i_id` int(10) unsigned NOT NULL,
-  `min_start` datetime,
-  `next_start` datetime
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
 -- Table structure for table `template_ds`
 --
 
@@ -543,18 +529,6 @@ CREATE TABLE `template_in` (
   `first_status_time` datetime default NULL,
   `latest_status_time` datetime default NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `test1`
---
-
-DROP TABLE IF EXISTS `test1`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `test1` (
-  `i_id` int(10) unsigned NOT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -818,7 +792,7 @@ update tt10 t join cdb_counters c
 
 -- Create entries for all the new DataSets
 insert into cdb_datasets (
- cdb_instance_id, cdb_counter_id, created_on, cdb_prefix, cdb_path )
+ cdb_instance_id, cdb_counter_id, created_at, cdb_prefix, cdb_path )
  select t.i_id, t.c_id, now(), t.cdc_prefix, t.cdc_path
  from tt10 as t;
 
