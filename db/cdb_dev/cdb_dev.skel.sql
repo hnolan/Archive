@@ -30,6 +30,8 @@ CREATE TABLE `cdb_counters` (
   `in_extract` bit(1) NOT NULL default '\0',
   `created_at` datetime default NULL,
   `updated_at` datetime default NULL,
+  `counter_type` varchar(45) default NULL,
+  `counter_subtype` varchar(45) default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `idx_counter_name_unique` USING BTREE (`cdb_object_id`,`counter_name`),
   CONSTRAINT `FK_counter_object` FOREIGN KEY (`cdb_object_id`) REFERENCES `cdb_objects` (`id`)
@@ -145,7 +147,7 @@ CREATE TABLE `cdb_instances` (
   KEY `FK_instance_object` USING BTREE (`cdb_object_id`),
   CONSTRAINT `FK_instance_machine` FOREIGN KEY (`cdb_machine_id`) REFERENCES `cdb_machines` (`id`),
   CONSTRAINT `FK_instance_object` FOREIGN KEY (`cdb_object_id`) REFERENCES `cdb_objects` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3045 DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC;
+) ENGINE=InnoDB AUTO_INCREMENT=4354 DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -161,7 +163,7 @@ CREATE TABLE `cdb_log` (
   `pn` varchar(80) default NULL,
   `txt` varchar(1024) default NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=122 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=256 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -448,6 +450,20 @@ CREATE TABLE `nagios_events_vltx` (
   `message` varchar(512) NOT NULL,
   PRIMARY KEY  (`start_time`,`cdb_instance_id`),
   KEY `IDX_end_time` (`end_time`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `t1`
+--
+
+DROP TABLE IF EXISTS `t1`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `t1` (
+  `i_id` int(10) unsigned NOT NULL,
+  `min_start` datetime,
+  `next_start` datetime
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1171,30 +1187,329 @@ END main;
 
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
-/*!50003 DROP PROCEDURE IF EXISTS `event_info` */;;
+/*!50003 DROP PROCEDURE IF EXISTS `get_avail_chart_data` */;;
 /*!50003 SET SESSION SQL_MODE=""*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `event_info`(
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `get_avail_chart_data`(
         p_prefix varchar(10),
-        p_start datetime,
-        p_end datetime
+        p_machine varchar(250),
+        p_instance varchar(250),
+        start_date varchar(30),
+        end_date varchar(30),
+        slot_size varchar(20)
         )
 BEGIN
 
-declare p_total int;
-set p_total = TIMESTAMPDIFF(SECOND,p_start,p_end);
+-- Additional block to allow early exit from sproc
+main: BEGIN
 
-select entry_type,
- count(*), sum( TIMESTAMPDIFF( SECOND,
- CASE when start_time < p_start then p_start else start_time END,
- CASE when end_time is null then p_end when end_time > p_end then p_end else end_time END
- )) dur,
- 100 * sum( TIMESTAMPDIFF( SECOND,
- CASE when start_time < p_start then p_start else start_time END,
- CASE when end_time is null then p_end when end_time > p_end then p_end else end_time END
- )) / p_total as '% dur'
- from nagios_events_sthc e
- where e.start_time < p_end and ( end_time > p_start or end_time is null )
- group by entry_type;
+-- Declare variables
+declare sd date;
+declare ed date;
+declare d1 date;
+declare d2 date;
+declare rc int default 0;
+declare msg varchar(250);
+declare event_table varchar(50);
+
+-- ---------------------
+--  Validate params
+-- ---------------------
+
+-- Check that an event table is defined for this prefix
+select count(*) from cdb_datasources ds
+ join cdb_customers c on c.id = ds.cdb_customer_id
+ where c.prefix = p_prefix and ds.source_app = 'nagevt'
+ into rc;
+
+if rc = 1 then
+  select ds.target_table from cdb_datasources ds
+   join cdb_customers c on c.id = ds.cdb_customer_id
+   where c.prefix = p_prefix and ds.source_app = 'nagevt'
+   into event_table;
+ else
+  set msg = concat( 'Exit. *** Error - ', rc, ' datasources found ***' );
+  call cdb_logit( 'event_info', msg );
+  select msg;
+  leave main;
+ end if;
+
+-- Validate input dates
+if end_date = '' then
+  set ed = cast(now() as date);
+ else
+  set ed = cast(end_date as date);
+ end if;
+
+if start_date = '' then
+  set sd = date_sub( ed, interval 30 day );
+ else
+  set sd = cast(start_date as date);
+ end if;
+
+set slot_size = lcase(slot_size);
+
+-- ---------------------
+--  Generate slot table
+-- ---------------------
+
+-- Generate a temporary table containing timeslots in the range
+drop temporary table if exists temp_slots;
+create temporary table temp_slots (
+ slot_start date,
+ slot_end date,
+ slot_duration int
+ );
+
+-- Generate time slots
+if slot_size = 'day' or slot_size = 'daily' then
+    -- Populate table with daily dates
+    set d1 = sd;
+    while d1 < ed do
+      set d2 = date_add( d1, interval 1 day );
+      insert into temp_slots ( slot_start, slot_end, slot_duration ) value ( d1, d2, timestampdiff( second, d1, d2 ) );
+      set d1 = d2;
+     end while;
+ else
+    -- Populate table with a single timeslot
+   insert into temp_slots ( slot_start, slot_end, slot_duration ) value ( sd, ed, timestampdiff( second, sd, ed ) );
+ end if;
+
+-- ------------------------
+--  Select matching instances
+-- ------------------------
+
+drop temporary table if exists temp_selections;
+
+create temporary table temp_selections
+ select i_id, concat( cdb_machine, if(cdb_instance='','',':'), cdb_instance ) as selection
+ from event_instances where cdb_machine like p_machine and cdb_instance like p_instance;
+
+-- ------------------------
+--  Select matching events
+-- ------------------------
+
+drop temporary table if exists temp_events;
+
+set @sql = concat( 'create temporary table temp_events ' );
+set @sql = concat( @sql, 'select selection, concat( ev_state, '' - '', hard_soft ) as series, e.* ' );
+set @sql = concat( @sql, ' from ', event_table, ' e join temp_selections s on e.cdb_instance_id = s.i_id ' );
+set @sql = concat( @sql, '  where e.start_time < ''', ed, ''' and ( e.end_time > ''', sd, ''' or e.end_time is null )' );
+
+prepare evtsel from @sql;
+execute evtsel;
+
+-- ------------------------
+--  Calculate outage slots
+-- ------------------------
+
+drop temporary table if exists temp_outage_slots;
+
+create temporary table temp_outage_slots
+select slot_start, slot_duration, series, selection,
+ count(*) as event_count,
+ sum(
+   TIMESTAMPDIFF(
+     SECOND,
+     CASE when start_time < slot_start then slot_start else start_time END,
+     CASE when end_time is null then slot_end when end_time > slot_end then slot_end else end_time END
+     )
+   ) event_duration
+ from temp_events e join temp_slots s
+  on e.start_time < slot_end and ( end_time > slot_start or end_time is null )
+ group by slot_start, slot_end, series, selection
+ order by slot_start, slot_end, series;
+
+-- ------------------------
+--  Calculate uptime slots
+-- ------------------------
+
+drop temporary table if exists temp_uptime_slots;
+
+create temporary table temp_uptime_slots
+select e.selection,
+   case
+     when s.slot_end < i.first_status_time or s.slot_start > i.latest_status_time then 'NO DATA'
+     when instr(e.selection,':') then 'OK'
+     else 'UP'
+    end as series,
+   s.slot_start as category,
+   1 as event_count, s.slot_duration, s.slot_duration - ifnull(o.down_time,0) as event_duration
+  from temp_slots s
+   cross join temp_selections e
+   left join cdb_instances i on e.i_id = i.id
+   left join (
+    select slot_start, selection, sum(event_duration) as down_time
+     from temp_outage_slots group by slot_start, selection
+    ) o on s.slot_start = o.slot_start and e.selection = o.selection;
+
+-- ------------------------
+--  Combine up and out time
+-- ------------------------
+select selection, category, series, slot_duration, event_count, event_duration, round(100 * event_duration / slot_duration,2) as 'event_percent'
+  from temp_uptime_slots where event_duration > 0
+ union
+  select selection, slot_start as category, series,
+    slot_duration, event_count, event_duration, round(100 * event_duration / slot_duration,2) as 'event_percent'
+   from temp_outage_slots
+ order by selection, category, series;
+
+END; -- end of 'main' block
+
+-- Tidy up, before exit
+drop temporary table if exists temp_uptime_slots;
+drop temporary table if exists temp_outage_slots;
+drop temporary table if exists temp_events;
+drop temporary table if exists temp_selections;
+drop temporary table if exists temp_slots;
+
+END */;;
+/*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
+/*!50003 DROP PROCEDURE IF EXISTS `get_perf_chart_data` */;;
+/*!50003 SET SESSION SQL_MODE=""*/;;
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `get_perf_chart_data`(
+ p_prefix varchar(50),
+ p_seltype varchar(50),
+ p_selection varchar(50),
+ p_startdate datetime,
+ p_enddate datetime,
+ p_period int
+ )
+BEGIN
+
+-- Additional block to allow early exit from sproc
+main: BEGIN
+
+-- Declare variables and cursors
+declare done int default 0;
+-- declare piv varchar(50);
+-- declare pivcur cursor for select pivot from pivot;
+
+declare sd datetime;
+declare ed datetime;
+declare fmt varchar(30);
+
+declare continue handler for 1051 set done = 1;
+
+drop table if exists TempDatasets;
+drop table if exists TempData;
+drop table if exists TempSeries;
+
+-- *************** Param validation ***************
+
+set sd = p_startdate;
+set ed = p_enddate;
+
+-- *************** Dataset Selection ***************
+
+create temporary table TempDatasets (
+  dataset_id int not null,
+  prefix varchar(50) not null,
+  selection varchar(50) not null,
+  series varchar(250) not null
+  );
+
+if p_seltype = 'Machine' or p_seltype = 'MachineInOut' then
+  -- Machine selected
+  insert into TempDatasets ( dataset_id, prefix, selection, series )
+   select dd.cdb_dataset_id, dd.cdb_prefix, dd.cdb_counter as selection, dd.cdb_instance as series
+    from dataset_details dd
+   where dd.cdb_prefix = p_prefix and dd.cdb_machine = p_selection;
+ else
+  -- Counter selected
+  insert into TempDatasets ( dataset_id, prefix, selection, series )
+   select dd.cdb_dataset_id, dd.cdb_prefix, dd.cdb_machine as selection, dd.cdb_instance as series
+    from dataset_details dd
+   where dd.cdb_prefix = p_prefix and dd.cdb_counter = p_selection;
+ end if;
+
+-- select * from TempDatasets;
+-- drop table TempDatasets;
+
+
+-- *************** Table specific portion ***************
+
+create temporary table TempData (
+  sample_time datetime not null,
+  dataset_id int not null,
+  data_min float not null,
+  data_max float not null,
+  data_sum float not null,
+  data_count int not null
+  );
+
+if p_period = 21 then
+  set fmt = '%H:%i';
+  set @sql = concat( 'insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )' );
+  set @sql = concat( @sql, 'select date_add(''1900-01-01'', interval sample_hour hour), cdb_dataset_id, min(data_min), max(data_max), sum(data_sum), sum(data_count)' );
+  set @sql = concat( @sql, ' from hourly_data_', lower(p_prefix), ' dt inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id' );
+  set @sql = concat( @sql, ' where sample_time >= ''', sd, ''' and sample_time < ''', ed, ''' ' );
+  set @sql = concat( @sql, ' group by sample_hour, cdb_dataset_id;' );
+  prepare tmpd from @sql;
+  execute tmpd;
+ elseif p_period = 20 then
+  set fmt = '%Y-%m-%d %H:%i';
+  set @sql = concat( 'insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )' );
+  set @sql = concat( @sql, 'select sample_time, cdb_dataset_id, data_min, data_max, data_sum, data_count' );
+  set @sql = concat( @sql, ' from hourly_data_', lower(p_prefix), ' dt inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id' );
+  set @sql = concat( @sql, ' where sample_time >= ''', sd, ''' and sample_time < ''', ed, '''; ' );
+  prepare tmpd from @sql;
+  execute tmpd;
+ else
+  set fmt = '%Y-%m-%d';
+  insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )
+  select sample_time, cdb_dataset_id, data_min, data_max, data_sum, data_count
+   from dt30_daily_data dt inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id
+   where sample_time >= sd and sample_time < ed and cdb_shift_id = 1;
+ end if;
+
+-- select * from TempData;
+
+-- *************** Data Processing portion ***************
+
+create temporary table TempSeries (
+  sample_time varchar(30) not null,
+  data_type varchar(20) not null,
+  data_val float not null,
+  selection varchar(50) not null,
+  series varchar(250) not null
+  );
+
+/*
+insert into TempSeries ( sample_time, data_type, data_val, selection, series )
+ select sample_time, 'Min', data_min, selection, series from TempData dt
+ inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
+
+insert into TempSeries ( sample_time, data_type, data_val, selection, series )
+ select sample_time, 'Max', data_max, selection, series from TempData dt
+ inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
+
+insert into TempSeries ( sample_time, data_type, data_val, selection, series )
+ select sample_time, 'Cnt', data_count, selection, series from TempData dt
+ inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
+*/
+
+
+if p_seltype = 'MachineInOut' then
+  insert into TempSeries ( sample_time, data_type, data_val, selection, series )
+   select date_format(sample_time,fmt), 'Avg', IF(c.counter_subtype = 'Out', ( data_sum / data_count ) * -1 , data_sum / data_count ),
+    c.counter_type, concat(ds.series,' (',c.counter_subtype,')') from TempData dt
+   inner join TempDatasets ds on dt.dataset_id = ds.dataset_id
+   inner join cdb_counters as c on ds.selection = c.counter_name;
+ else
+  insert into TempSeries ( sample_time, data_type, data_val, selection, series )
+   select date_format(sample_time,fmt), 'Avg', data_sum / data_count, selection, series from TempData dt
+   inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
+ end if;
+
+drop table TempDatasets;
+drop table TempData;
+
+select selection, series, data_type, sample_time, data_val from TempSeries
+ order by selection, series, data_type, sample_time;
+
+drop table TempSeries;
+
+END main;
 
 END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
@@ -1527,6 +1842,7 @@ declare done int default 0;
 
 declare sd datetime;
 declare ed datetime;
+declare fmt varchar(30);
 
 declare continue handler for 1051 set done = 1;
 
@@ -1578,6 +1894,7 @@ create temporary table TempData (
   );
 
 if p_period = 21 then
+  set fmt = '%H:%i';
   set @sql = concat( 'insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )' );
   set @sql = concat( @sql, 'select date_add(''1900-01-01'', interval sample_hour hour), cdb_dataset_id, min(data_min), max(data_max), sum(data_sum), sum(data_count)' );
   set @sql = concat( @sql, ' from hourly_data_', lower(p_prefix), ' dt inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id' );
@@ -1586,6 +1903,7 @@ if p_period = 21 then
   prepare tmpd from @sql;
   execute tmpd;
  elseif p_period = 20 then
+  set fmt = '%Y-%m-%d %H:%i';
   set @sql = concat( 'insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )' );
   set @sql = concat( @sql, 'select sample_time, cdb_dataset_id, data_min, data_max, data_sum, data_count' );
   set @sql = concat( @sql, ' from hourly_data_', lower(p_prefix), ' dt inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id' );
@@ -1593,10 +1911,11 @@ if p_period = 21 then
   prepare tmpd from @sql;
   execute tmpd;
  else
+  set fmt = '%Y-%m-%d';
   insert into TempData ( sample_time, dataset_id, data_min, data_max, data_sum, data_count )
   select sample_time, cdb_dataset_id, data_min, data_max, data_sum, data_count
    from dt30_daily_data dt inner join TempDatasets ds on dt.cdb_dataset_id = ds.dataset_id
-   where sample_time >= sd and sample_time < ed;
+   where sample_time >= sd and sample_time < ed and cdb_shift_id = 1;
  end if;
 
 -- select * from TempData limit 10;
@@ -1604,7 +1923,7 @@ if p_period = 21 then
 -- *************** Data Processing portion ***************
 
 create temporary table TempSeries (
-  sample_time datetime not null,
+  sample_time varchar(30) not null,
   data_type varchar(20) not null,
   data_val float not null,
   selection varchar(50) not null,
@@ -1612,19 +1931,19 @@ create temporary table TempSeries (
   );
 
 insert into TempSeries ( sample_time, data_type, data_val, selection, series )
- select sample_time, 'Min', data_min, selection, series from TempData dt
+ select date_format(sample_time,fmt), 'Min', data_min, selection, series from TempData dt
  inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
 
 insert into TempSeries ( sample_time, data_type, data_val, selection, series )
- select sample_time, 'Max', data_max, selection, series from TempData dt
+ select date_format(sample_time,fmt), 'Max', data_max, selection, series from TempData dt
  inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
 
 insert into TempSeries ( sample_time, data_type, data_val, selection, series )
- select sample_time, 'Avg', data_sum / data_count, selection, series from TempData dt
+ select date_format(sample_time,fmt), 'Avg', data_sum / data_count, selection, series from TempData dt
  inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
 
 insert into TempSeries ( sample_time, data_type, data_val, selection, series )
- select sample_time, 'Cnt', data_count, selection, series from TempData dt
+ select date_format(sample_time,fmt), 'Cnt', data_count, selection, series from TempData dt
  inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
 
 drop table TempDatasets;

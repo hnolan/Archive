@@ -147,7 +147,7 @@ update tt10 t join cdb_counters c
 
 -- Create entries for all the new DataSets
 insert into cdb_datasets (
- cdb_instance_id, cdb_counter_id, created_on, cdb_prefix, cdb_path )
+ cdb_instance_id, cdb_counter_id, created_at, cdb_prefix, cdb_path )
  select t.i_id, t.c_id, now(), t.cdc_prefix, t.cdc_path
  from tt10 as t;
 
