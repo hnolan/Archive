@@ -178,6 +178,12 @@ class NagLogFile
 
 			while fileline = @f.gets
 
+				# Ignore very noisy diagnostic log entries
+				#
+				next if fileline =~ /\] EXTERNAL COMMAND: / or 
+								fileline =~ /\] PASSIVE SERVICE CHECK: / or
+								fileline =~ /\] PASSIVE HOST CHECK: /
+
 				begin
 					le = NagLogEntry.new(fileline.chomp)
 					et = le.entrytype
