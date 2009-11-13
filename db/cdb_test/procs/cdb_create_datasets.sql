@@ -34,13 +34,13 @@ declare done int default 0;
 call cdb_logit( pn, concat( 'Enter' ) );
 
 -- Create and populate temporary table to hold dataset details
-create temporary table tt10 DEFAULT CHARSET=latin1
+create temporary table tt10 DEFAULT CHARSET=utf8
  select distinct c.id AS p_id, 0 AS m_id, 0 AS o_id, 0 AS i_id, 0 AS c_id,
 	t.cdc_machine, t.cdc_object, t.cdc_instance, t.cdc_counter, t.cdc_prefix, t.cdc_path
  from temp_datasets t
-  join m00_customers c on c.prefix = t.cdc_prefix
+  join cdb_customers c on c.prefix = t.cdc_prefix
  where t.cdc_path not in (
-	SELECT d.cdb_path FROM m05_datasets AS d where d.cdb_prefix = t.cdc_prefix
+	SELECT d.cdb_path FROM cdb_datasets AS d where d.cdb_prefix = t.cdc_prefix
   );
 
 -- Check for entries in tt10
@@ -62,18 +62,15 @@ if rc <= 0 then
 -- Log info message
 call cdb_logit( pn, concat( 'Found ', rc, ' new (valid) datasets' ) );
 
--- select distinct 'tt10-machine',collation(cdb_machine) from tt10;
--- select distinct 'm01-machine', collation(name) from m01_machines;
-
 -- ============
 --   Machines
 -- ============
 
 -- Create entries for all new Machines
-insert into m01_machines ( cdb_customer_id, name )
+insert into cdb_machines ( cdb_customer_id, machine_name )
  select distinct t.p_id, t.cdc_machine from tt10 t
   where t.cdc_machine not in (
- select m.name from m01_machines m where m.cdb_customer_id = t.p_id );
+ select m.machine_name from cdb_machines m where m.cdb_customer_id = t.p_id );
 
 set rc = row_count();
 if rc > 0 then
@@ -81,8 +78,8 @@ if rc > 0 then
  end if;
 
  -- Update temp table with Machine IDs
-update tt10 t join m01_machines m
- on t.p_id = m.cdb_customer_id and t.cdc_machine = m.name
+update tt10 t join cdb_machines m
+ on t.p_id = m.cdb_customer_id and t.cdc_machine = m.machine_name
  SET t.m_id = m.id;
 
 -- ============
@@ -90,9 +87,9 @@ update tt10 t join m01_machines m
 -- ============
 
 -- create entries for all new objects
-insert into m02_objects ( name )
+insert into cdb_objects ( object_name )
  select distinct t.cdc_object from tt10 t
- where t.cdc_object not in ( select distinct name from m02_objects );
+ where t.cdc_object not in ( select distinct object_name from cdb_objects );
 
 set rc = row_count();
 if rc > 0 then
@@ -100,7 +97,7 @@ if rc > 0 then
  end if;
 
 -- update temp table with object ids
-update tt10 t join m02_objects o on t.cdc_object = o.name
+update tt10 t join cdb_objects o on t.cdc_object = o.object_name
  set t.o_id = o.id;
 
 -- ============
@@ -108,10 +105,10 @@ update tt10 t join m02_objects o on t.cdc_object = o.name
 -- ============
 
 -- Create entries for all new Instances
-insert into m03_instances ( cdb_machine_id, cdb_object_id, name )
+insert into cdb_instances ( cdb_machine_id, cdb_object_id, instance_name )
  select distinct t.m_id, t.o_id, t.cdc_instance
  from tt10 t where t.cdc_instance not in (
-	select name from m03_instances where cdb_machine_id = t.m_id and cdb_object_id = t.o_id );
+	select instance_name from cdb_instances where cdb_machine_id = t.m_id and cdb_object_id = t.o_id );
 
 set rc = row_count();
 if rc > 0 then
@@ -119,8 +116,8 @@ if rc > 0 then
  end if;
 
 -- Update temp table with Instance IDs
-update tt10 t join m03_instances i on
- t.cdc_instance = i.name and t.m_id = i.cdb_machine_id and t.o_id = i.cdb_object_id
+update tt10 t join cdb_instances i on
+ t.cdc_instance = i.instance_name and t.m_id = i.cdb_machine_id and t.o_id = i.cdb_object_id
  set t.i_id = i.id;
 
 -- ============
@@ -128,10 +125,10 @@ update tt10 t join m03_instances i on
 -- ============
 
 -- Create entries for all new Counters
-insert into m04_counters ( cdb_object_id, name )
+insert into cdb_counters ( cdb_object_id, counter_name )
  select distinct t.o_id, t.cdc_counter from tt10 t
  where t.cdc_counter not in (
-	select c.name from m04_counters c where c.cdb_object_id = t.o_id );
+	select c.counter_name from cdb_counters c where c.cdb_object_id = t.o_id );
 
 set rc = row_count();
 if rc > 0 then
@@ -139,8 +136,8 @@ if rc > 0 then
  end if;
 
 -- Update temp table with Counter IDs
-update tt10 t join m04_counters c
- on t.cdc_counter = c.name and t.o_id = c.cdb_object_id
+update tt10 t join cdb_counters c
+ on t.cdc_counter = c.counter_name and t.o_id = c.cdb_object_id
  set t.c_id = c.id;
 
 
@@ -149,8 +146,8 @@ update tt10 t join m04_counters c
 -- ====================
 
 -- Create entries for all the new DataSets
-insert into m05_datasets (
- cdb_instance_id, cdb_counter_id, created_on, cdb_prefix, cdb_path )
+insert into cdb_datasets (
+ cdb_instance_id, cdb_counter_id, created_at, cdb_prefix, cdb_path )
  select t.i_id, t.c_id, now(), t.cdc_prefix, t.cdc_path
  from tt10 as t;
 

@@ -163,7 +163,7 @@ CREATE TABLE `cdb_log` (
   `pn` varchar(80) default NULL,
   `txt` varchar(1024) default NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=256 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB AUTO_INCREMENT=275 DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -260,7 +260,8 @@ CREATE TABLE `dt20_hourly_data` (
   `data_max` float NOT NULL,
   `data_sum` float NOT NULL,
   `data_count` int(10) unsigned NOT NULL,
-  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
+  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`),
+  KEY `IDX_dsid` (`cdb_dataset_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -282,7 +283,8 @@ CREATE TABLE `dt30_daily_data` (
   `sample_week` int(10) unsigned NOT NULL,
   `sample_month` int(10) unsigned NOT NULL,
   `sample_year` int(10) unsigned NOT NULL,
-  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`,`cdb_shift_id`)
+  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`,`cdb_shift_id`),
+  KEY `IDX_dsid` (`cdb_dataset_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -320,7 +322,8 @@ CREATE TABLE `hourly_data_cwnt` (
   `data_max` float NOT NULL,
   `data_sum` float NOT NULL,
   `data_count` int(10) unsigned NOT NULL,
-  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
+  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`),
+  KEY `IDX_dsid` (`cdb_dataset_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -340,7 +343,8 @@ CREATE TABLE `hourly_data_lahc` (
   `data_max` float NOT NULL,
   `data_sum` float NOT NULL,
   `data_count` int(10) unsigned NOT NULL,
-  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
+  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`),
+  KEY `IDX_dsid` (`cdb_dataset_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -360,7 +364,8 @@ CREATE TABLE `hourly_data_sthc` (
   `data_max` float NOT NULL,
   `data_sum` float NOT NULL,
   `data_count` int(10) unsigned NOT NULL,
-  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
+  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`),
+  KEY `IDX_dsid` (`cdb_dataset_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -380,7 +385,8 @@ CREATE TABLE `hourly_data_vltx` (
   `data_max` float NOT NULL,
   `data_sum` float NOT NULL,
   `data_count` int(10) unsigned NOT NULL,
-  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`)
+  PRIMARY KEY  USING BTREE (`sample_time`,`cdb_dataset_id`),
+  KEY `IDX_dsid` (`cdb_dataset_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

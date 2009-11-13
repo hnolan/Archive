@@ -91,7 +91,7 @@ CREATE TABLE `cdc_datasets` (
   PRIMARY KEY  (`id`),
   KEY `IDX_cdc_iid` (`cdc_iid`),
   KEY `IDX_cdc_cid` (`cdc_cid`)
-) ENGINE=InnoDB AUTO_INCREMENT=2645 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -167,7 +167,7 @@ CREATE TABLE `cdc_interfaces` (
   PRIMARY KEY  (`id`),
   KEY `IDX_full_name` USING BTREE (`router_name`,`interface_name`),
   KEY `IDX_rtg_iid` (`rtg_iid`)
-) ENGINE=InnoDB AUTO_INCREMENT=4433 DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=FIXED;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
