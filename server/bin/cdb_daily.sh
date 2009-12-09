@@ -12,4 +12,8 @@ rsync -rv --remove-source-files  serviceman1::events ~/import/events >>$LOG 2>&1
 #
 /usr/local/bin/ruby $BINDIR/cdb_import_perfdata.rb >>$LOG 2>&1
 /usr/local/bin/ruby $BINDIR/cdb_import_events.rb >>$LOG 2>&1
+#
+#       Update daily data table
+#
+mysql -partichoke -u cdbapp cdb_prod < $BINDIR/cdb_daily_update.sql >>$LOG 2>&1
 
