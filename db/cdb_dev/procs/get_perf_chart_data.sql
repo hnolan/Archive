@@ -40,15 +40,28 @@ create temporary table TempDatasets (
   dataset_id int not null,
   prefix varchar(50) not null,
   selection varchar(50) not null,
-  series varchar(250) not null
+  series varchar(250) not null,
+  counter_subtype varchar(50)
   );
 
-if p_seltype = 'Machine' or p_seltype = 'MachineInOut' then
+if p_seltype = 'Machine' then
   -- Machine selected
   insert into TempDatasets ( dataset_id, prefix, selection, series )
-   select dd.cdb_dataset_id, dd.cdb_prefix, dd.cdb_counter as selection, dd.cdb_instance as series
+   select dd.cdb_dataset_id, dd.cdb_prefix,
+   if (isnull(dd.parent_name), dd.cdb_counter, concat( dd.cdb_counter, ' (', dd.parent_name, ')' ) ) as selection,
+   dd.cdb_instance as series
     from dataset_details dd
    where dd.cdb_prefix = p_prefix and dd.cdb_machine = p_selection;
+
+ elseif p_seltype = 'MachineInOut' then
+  -- MachineInOut selected
+  insert into TempDatasets ( dataset_id, prefix, selection, series, counter_subtype )
+   select dd.cdb_dataset_id, dd.cdb_prefix,
+   if (isnull(dd.parent_name), dd.counter_type, concat( dd.counter_type, ' (', dd.parent_name, ')' ) ) as selection,
+   concat(dd.cdb_instance,' (',dd.counter_subtype,')') as series, dd.counter_subtype
+    from dataset_details dd
+   where dd.cdb_prefix = p_prefix and dd.cdb_machine = p_selection;
+
  else
   -- Counter selected
   insert into TempDatasets ( dataset_id, prefix, selection, series )
@@ -109,27 +122,11 @@ create temporary table TempSeries (
   series varchar(250) not null
   );
 
-/*
-insert into TempSeries ( sample_time, data_type, data_val, selection, series )
- select sample_time, 'Min', data_min, selection, series from TempData dt
- inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
-
-insert into TempSeries ( sample_time, data_type, data_val, selection, series )
- select sample_time, 'Max', data_max, selection, series from TempData dt
- inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
-
-insert into TempSeries ( sample_time, data_type, data_val, selection, series )
- select sample_time, 'Cnt', data_count, selection, series from TempData dt
- inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
-*/
-
-
 if p_seltype = 'MachineInOut' then
   insert into TempSeries ( sample_time, data_type, data_val, selection, series )
-   select date_format(sample_time,fmt), 'Avg', IF(c.counter_subtype = 'Out', ( data_sum / data_count ) * -1 , data_sum / data_count ),
-    c.counter_type, concat(ds.series,' (',c.counter_subtype,')') from TempData dt
-   inner join TempDatasets ds on dt.dataset_id = ds.dataset_id
-   inner join cdb_counters as c on ds.selection = c.counter_name;
+   select date_format(sample_time,fmt), 'Avg', IF(counter_subtype = 'Out', ( data_sum / data_count ) * -1 , data_sum / data_count ),
+    selection, series from TempData dt
+   inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
  else
   insert into TempSeries ( sample_time, data_type, data_val, selection, series )
    select date_format(sample_time,fmt), 'Avg', data_sum / data_count, selection, series from TempData dt

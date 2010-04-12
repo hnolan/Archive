@@ -218,7 +218,10 @@ DROP TABLE IF EXISTS `dataset_details`;
   `cdb_machine` varchar(100),
   `cdb_object` varchar(50),
   `cdb_instance` varchar(250),
-  `cdb_counter` varchar(50)
+  `parent_name` varchar(50),
+  `cdb_counter` varchar(50),
+  `counter_type` varchar(45),
+  `counter_subtype` varchar(45)
 ) ENGINE=MyISAM */;
 
 --
@@ -303,7 +306,9 @@ DROP TABLE IF EXISTS `event_instances`;
   `cdb_customer` varchar(100),
   `cdb_machine` varchar(100),
   `cdb_object` varchar(50),
-  `cdb_instance` varchar(250)
+  `cdb_instance` varchar(250),
+  `first_status_time` datetime,
+  `latest_status_time` datetime
 ) ENGINE=MyISAM */;
 
 --
@@ -1195,13 +1200,14 @@ END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `get_avail_chart_data` */;;
 /*!50003 SET SESSION SQL_MODE=""*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `get_avail_chart_data`(
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `get_avail_chart_data`(
         p_prefix varchar(10),
         p_machine varchar(250),
         p_instance varchar(250),
-        start_date varchar(30),
-        end_date varchar(30),
-        slot_size varchar(20)
+        p_start_date varchar(30),
+        p_end_date varchar(30),
+        p_slot_size varchar(20),
+        p_hard_soft varchar(20)
         )
 BEGIN
 
@@ -1216,6 +1222,8 @@ declare d2 date;
 declare rc int default 0;
 declare msg varchar(250);
 declare event_table varchar(50);
+declare slot_size varchar(20);
+declare hard_or_soft varchar(20);
 
 -- ---------------------
 --  Validate params
@@ -1235,24 +1243,34 @@ if rc = 1 then
  else
   set msg = concat( 'Exit. *** Error - ', rc, ' datasources found ***' );
   call cdb_logit( 'event_info', msg );
-  select msg;
-  leave main;
+--  select msg;
+--  leave main;
+  set event_table = 'dt15_nagios_events';
  end if;
 
 -- Validate input dates
-if end_date = '' then
+if p_end_date = '' then
   set ed = cast(now() as date);
  else
-  set ed = cast(end_date as date);
+  set ed = cast(p_end_date as date);
  end if;
 
-if start_date = '' then
+if p_start_date = '' then
   set sd = date_sub( ed, interval 30 day );
  else
-  set sd = cast(start_date as date);
+  set sd = cast(p_start_date as date);
  end if;
 
-set slot_size = lcase(slot_size);
+
+if lcase(p_hard_soft) = 'hard' then
+  set hard_or_soft = 'HARD';
+ elseif lcase(p_hard_soft) = 'soft' then
+  set hard_or_soft = 'SOFT';
+ else
+  set hard_or_soft = 'BOTH';
+ end if;
+
+set slot_size = lcase(p_slot_size);
 
 -- ---------------------
 --  Generate slot table
@@ -1287,22 +1305,37 @@ if slot_size = 'day' or slot_size = 'daily' then
 drop temporary table if exists temp_selections;
 
 create temporary table temp_selections
- select i_id, concat( cdb_machine, if(cdb_instance='','',':'), cdb_instance ) as selection
- from event_instances where cdb_machine like p_machine and cdb_instance like p_instance;
+ select i_id, first_status_time, latest_status_time,
+   concat( cdb_machine, if(cdb_instance='','',':'), cdb_instance ) as selection
+  from event_instances
+    -- select based upon customer, machine and instance
+   where cdb_prefix = p_prefix and cdb_machine like p_machine and cdb_instance like p_instance
+    -- also exclude any instance whose first appearance is after this period
+    -- or whose last status update was before the period started
+    and first_status_time < ed and latest_status_time > sd;
 
--- ------------------------
---  Select matching events
--- ------------------------
+-- select * from temp_selections;
+
+-- ----------------------------
+--  Select matching event data
+-- ----------------------------
 
 drop temporary table if exists temp_events;
 
 set @sql = concat( 'create temporary table temp_events ' );
-set @sql = concat( @sql, 'select selection, concat( ev_state, '' - '', hard_soft ) as series, e.* ' );
+set @sql = concat( @sql, 'select i_id, start_time, end_time, first_status_time, latest_status_time, ' );
+set @sql = concat( @sql, '  selection, concat( ev_state, '' - '', hard_soft ) as series ' );
 set @sql = concat( @sql, ' from ', event_table, ' e join temp_selections s on e.cdb_instance_id = s.i_id ' );
-set @sql = concat( @sql, '  where e.start_time < ''', ed, ''' and ( e.end_time > ''', sd, ''' or e.end_time is null )' );
+set @sql = concat( @sql, '  where e.start_time < ''', ed, ''' and ( e.end_time > ''', sd, ''' or e.end_time is null ) ' );
+
+if hard_or_soft = 'HARD' or hard_or_soft = 'SOFT' then
+  set @sql = concat( @sql, '  and hard_soft = ''', hard_or_soft, ''' ' );
+ end if;
 
 prepare evtsel from @sql;
 execute evtsel;
+
+-- select * from temp_events;
 
 -- ------------------------
 --  Calculate outage slots
@@ -1310,21 +1343,59 @@ execute evtsel;
 
 drop temporary table if exists temp_outage_slots;
 
+-- Calculate outages due to events
 create temporary table temp_outage_slots
-select slot_start, slot_duration, series, selection,
+select slot_start, slot_duration, selection, series,
  count(*) as event_count,
  sum(
    TIMESTAMPDIFF(
      SECOND,
-     CASE when start_time < slot_start then slot_start else start_time END,
-     CASE when end_time is null then slot_end when end_time > slot_end then slot_end else end_time END
+     CASE
+       when start_time <= slot_start then slot_start
+       else start_time END,
+     CASE
+       when end_time is null then least(slot_end,latest_status_time)
+       when end_time >= slot_end then slot_end
+       else end_time END
      )
    ) event_duration
  from temp_events e join temp_slots s
-  on e.start_time < slot_end and ( end_time > slot_start or end_time is null )
- group by slot_start, slot_end, series, selection
- order by slot_start, slot_end, series;
+  on start_time < slot_end and (
+       end_time > slot_start or  ( end_time is null and latest_status_time > slot_start )
+       )
+ group by slot_start, slot_duration, selection, series;
 
+-- Calculate outage attributable to absence of monitoring data
+insert into temp_outage_slots
+select slot_start, slot_duration, selection, 'NO DATA' as series,
+   1 as event_count,
+   TIMESTAMPDIFF(
+     SECOND,
+     slot_start,
+     CASE
+       when first_status_time >= slot_end then slot_end
+       when first_status_time <= slot_start then slot_start
+       else first_status_time END
+     ) +
+   TIMESTAMPDIFF(
+     SECOND,
+     CASE
+       when latest_status_time <= slot_start then slot_start
+       when latest_status_time >= slot_end then slot_end
+       else latest_status_time END,
+     slot_end
+     ) as event_duration
+--
+ from temp_slots slot join temp_selections sel
+  on first_status_time > slot_start or latest_status_time < slot_end;
+
+/*
+select * from temp_outage_slots
+ order by selection, slot_start, series;
+
+select slot_start, selection, sum(event_duration) as down_time
+     from temp_outage_slots group by slot_start, selection;
+*/
 -- ------------------------
 --  Calculate uptime slots
 -- ------------------------
@@ -1334,7 +1405,6 @@ drop temporary table if exists temp_uptime_slots;
 create temporary table temp_uptime_slots
 select e.selection,
    case
-     when s.slot_end < i.first_status_time or s.slot_start > i.latest_status_time then 'NO DATA'
      when instr(e.selection,':') then 'OK'
      else 'UP'
     end as series,
@@ -1342,7 +1412,6 @@ select e.selection,
    1 as event_count, s.slot_duration, s.slot_duration - ifnull(o.down_time,0) as event_duration
   from temp_slots s
    cross join temp_selections e
-   left join cdb_instances i on e.i_id = i.id
    left join (
     select slot_start, selection, sum(event_duration) as down_time
      from temp_outage_slots group by slot_start, selection
@@ -1357,7 +1426,7 @@ select selection, category, series, slot_duration, event_count, event_duration, 
   select selection, slot_start as category, series,
     slot_duration, event_count, event_duration, round(100 * event_duration / slot_duration,2) as 'event_percent'
    from temp_outage_slots
- order by selection, category, series;
+ order by selection, series, category;
 
 END; -- end of 'main' block
 
@@ -1372,7 +1441,7 @@ END */;;
 /*!50003 SET SESSION SQL_MODE=@OLD_SQL_MODE*/;;
 /*!50003 DROP PROCEDURE IF EXISTS `get_perf_chart_data` */;;
 /*!50003 SET SESSION SQL_MODE=""*/;;
-/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`%`*/ /*!50003 PROCEDURE `get_perf_chart_data`(
+/*!50003 CREATE*/ /*!50020 DEFINER=`root`@`localhost`*/ /*!50003 PROCEDURE `get_perf_chart_data`(
  p_prefix varchar(50),
  p_seltype varchar(50),
  p_selection varchar(50),
@@ -1411,15 +1480,28 @@ create temporary table TempDatasets (
   dataset_id int not null,
   prefix varchar(50) not null,
   selection varchar(50) not null,
-  series varchar(250) not null
+  series varchar(250) not null,
+  counter_subtype varchar(50)
   );
 
-if p_seltype = 'Machine' or p_seltype = 'MachineInOut' then
+if p_seltype = 'Machine' then
   -- Machine selected
   insert into TempDatasets ( dataset_id, prefix, selection, series )
-   select dd.cdb_dataset_id, dd.cdb_prefix, dd.cdb_counter as selection, dd.cdb_instance as series
+   select dd.cdb_dataset_id, dd.cdb_prefix,
+   if (isnull(dd.parent_name), dd.cdb_counter, concat( dd.cdb_counter, ' (', dd.parent_name, ')' ) ) as selection,
+   dd.cdb_instance as series
     from dataset_details dd
    where dd.cdb_prefix = p_prefix and dd.cdb_machine = p_selection;
+
+ elseif p_seltype = 'MachineInOut' then
+  -- MachineInOut selected
+  insert into TempDatasets ( dataset_id, prefix, selection, series, counter_subtype )
+   select dd.cdb_dataset_id, dd.cdb_prefix,
+   if (isnull(dd.parent_name), dd.counter_type, concat( dd.counter_type, ' (', dd.parent_name, ')' ) ) as selection,
+   concat(dd.cdb_instance,' (',dd.counter_subtype,')') as series, dd.counter_subtype
+    from dataset_details dd
+   where dd.cdb_prefix = p_prefix and dd.cdb_machine = p_selection;
+
  else
   -- Counter selected
   insert into TempDatasets ( dataset_id, prefix, selection, series )
@@ -1480,27 +1562,11 @@ create temporary table TempSeries (
   series varchar(250) not null
   );
 
-/*
-insert into TempSeries ( sample_time, data_type, data_val, selection, series )
- select sample_time, 'Min', data_min, selection, series from TempData dt
- inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
-
-insert into TempSeries ( sample_time, data_type, data_val, selection, series )
- select sample_time, 'Max', data_max, selection, series from TempData dt
- inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
-
-insert into TempSeries ( sample_time, data_type, data_val, selection, series )
- select sample_time, 'Cnt', data_count, selection, series from TempData dt
- inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
-*/
-
-
 if p_seltype = 'MachineInOut' then
   insert into TempSeries ( sample_time, data_type, data_val, selection, series )
-   select date_format(sample_time,fmt), 'Avg', IF(c.counter_subtype = 'Out', ( data_sum / data_count ) * -1 , data_sum / data_count ),
-    c.counter_type, concat(ds.series,' (',c.counter_subtype,')') from TempData dt
-   inner join TempDatasets ds on dt.dataset_id = ds.dataset_id
-   inner join cdb_counters as c on ds.selection = c.counter_name;
+   select date_format(sample_time,fmt), 'Avg', IF(counter_subtype = 'Out', ( data_sum / data_count ) * -1 , data_sum / data_count ),
+    selection, series from TempData dt
+   inner join TempDatasets ds on dt.dataset_id = ds.dataset_id;
  else
   insert into TempSeries ( sample_time, data_type, data_val, selection, series )
    select date_format(sample_time,fmt), 'Avg', data_sum / data_count, selection, series from TempData dt
@@ -1974,7 +2040,7 @@ DELIMITER ;
 /*!50001 DROP VIEW IF EXISTS `dataset_details`*/;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
 /*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `dataset_details` AS select `m5`.`id` AS `cdb_dataset_id`,`m0`.`prefix` AS `cdb_prefix`,`m1`.`machine_name` AS `cdb_machine`,`m2`.`object_name` AS `cdb_object`,`m3`.`instance_name` AS `cdb_instance`,`m4`.`counter_name` AS `cdb_counter` from (((((`cdb_datasets` `m5` join `cdb_counters` `m4` on((`m4`.`id` = `m5`.`cdb_counter_id`))) join `cdb_instances` `m3` on((`m3`.`id` = `m5`.`cdb_instance_id`))) join `cdb_objects` `m2` on((`m2`.`id` = `m3`.`cdb_object_id`))) join `cdb_machines` `m1` on((`m1`.`id` = `m3`.`cdb_machine_id`))) join `cdb_customers` `m0` on((`m0`.`id` = `m1`.`cdb_customer_id`))) */;
+/*!50001 VIEW `dataset_details` AS select `m5`.`id` AS `cdb_dataset_id`,`m0`.`prefix` AS `cdb_prefix`,`m1`.`machine_name` AS `cdb_machine`,`m2`.`object_name` AS `cdb_object`,`m3`.`instance_name` AS `cdb_instance`,`m3`.`parent_name` AS `parent_name`,`m4`.`counter_name` AS `cdb_counter`,`m4`.`counter_type` AS `counter_type`,`m4`.`counter_subtype` AS `counter_subtype` from (((((`cdb_datasets` `m5` join `cdb_counters` `m4` on((`m4`.`id` = `m5`.`cdb_counter_id`))) join `cdb_instances` `m3` on((`m3`.`id` = `m5`.`cdb_instance_id`))) join `cdb_objects` `m2` on((`m2`.`id` = `m3`.`cdb_object_id`))) join `cdb_machines` `m1` on((`m1`.`id` = `m3`.`cdb_machine_id`))) join `cdb_customers` `m0` on((`m0`.`id` = `m1`.`cdb_customer_id`))) */;
 
 --
 -- Final view structure for view `event_instances`
@@ -1984,7 +2050,7 @@ DELIMITER ;
 /*!50001 DROP VIEW IF EXISTS `event_instances`*/;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
 /*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `event_instances` AS select `c`.`id` AS `c_id`,`m`.`id` AS `m_id`,`o`.`id` AS `o_id`,`i`.`id` AS `i_id`,`c`.`prefix` AS `cdb_prefix`,`c`.`customer_name` AS `cdb_customer`,`m`.`machine_name` AS `cdb_machine`,`o`.`object_name` AS `cdb_object`,`i`.`instance_name` AS `cdb_instance` from (((`cdb_customers` `c` join `cdb_machines` `m` on((`c`.`id` = `m`.`cdb_customer_id`))) join `cdb_instances` `i` on((`i`.`cdb_machine_id` = `m`.`id`))) join `cdb_objects` `o` on((`o`.`id` = `i`.`cdb_object_id`))) where (`o`.`type` = _utf8'event') */;
+/*!50001 VIEW `event_instances` AS select `c`.`id` AS `c_id`,`m`.`id` AS `m_id`,`o`.`id` AS `o_id`,`i`.`id` AS `i_id`,`c`.`prefix` AS `cdb_prefix`,`c`.`customer_name` AS `cdb_customer`,`m`.`machine_name` AS `cdb_machine`,`o`.`object_name` AS `cdb_object`,`i`.`instance_name` AS `cdb_instance`,`i`.`first_status_time` AS `first_status_time`,`i`.`latest_status_time` AS `latest_status_time` from (((`cdb_customers` `c` join `cdb_machines` `m` on((`c`.`id` = `m`.`cdb_customer_id`))) join `cdb_instances` `i` on((`i`.`cdb_machine_id` = `m`.`id`))) join `cdb_objects` `o` on((`o`.`id` = `i`.`cdb_object_id`))) where (`o`.`type` = _utf8'event') */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

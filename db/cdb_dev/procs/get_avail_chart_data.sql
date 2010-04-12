@@ -5,9 +5,10 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `get_avail_chart_data` (
         p_prefix varchar(10),
         p_machine varchar(250),
         p_instance varchar(250),
-        start_date varchar(30),
-        end_date varchar(30),
-        slot_size varchar(20)
+        p_start_date varchar(30),
+        p_end_date varchar(30),
+        p_slot_size varchar(20),
+        p_hard_soft varchar(20)
         )
 BEGIN
 
@@ -22,6 +23,8 @@ declare d2 date;
 declare rc int default 0;
 declare msg varchar(250);
 declare event_table varchar(50);
+declare slot_size varchar(20);
+declare hard_or_soft varchar(20);
 
 -- ---------------------
 --  Validate params
@@ -41,24 +44,34 @@ if rc = 1 then
  else
   set msg = concat( 'Exit. *** Error - ', rc, ' datasources found ***' );
   call cdb_logit( 'event_info', msg );
-  select msg;
-  leave main;
+--  select msg;
+--  leave main;
+  set event_table = 'dt15_nagios_events';
  end if;
 
 -- Validate input dates
-if end_date = '' then
+if p_end_date = '' then
   set ed = cast(now() as date);
  else
-  set ed = cast(end_date as date);
+  set ed = cast(p_end_date as date);
  end if;
 
-if start_date = '' then
+if p_start_date = '' then
   set sd = date_sub( ed, interval 30 day );
  else
-  set sd = cast(start_date as date);
+  set sd = cast(p_start_date as date);
  end if;
 
-set slot_size = lcase(slot_size);
+
+if lcase(p_hard_soft) = 'hard' then
+  set hard_or_soft = 'HARD';
+ elseif lcase(p_hard_soft) = 'soft' then
+  set hard_or_soft = 'SOFT';
+ else
+  set hard_or_soft = 'BOTH';
+ end if;
+
+set slot_size = lcase(p_slot_size);
 
 -- ---------------------
 --  Generate slot table
@@ -93,22 +106,37 @@ if slot_size = 'day' or slot_size = 'daily' then
 drop temporary table if exists temp_selections;
 
 create temporary table temp_selections
- select i_id, concat( cdb_machine, if(cdb_instance='','',':'), cdb_instance ) as selection
- from event_instances where cdb_machine like p_machine and cdb_instance like p_instance;
+ select i_id, first_status_time, latest_status_time,
+   concat( cdb_machine, if(cdb_instance='','',':'), cdb_instance ) as selection
+  from event_instances
+    -- select based upon customer, machine and instance
+   where cdb_prefix = p_prefix and cdb_machine like p_machine and cdb_instance like p_instance
+    -- also exclude any instance whose first appearance is after this period
+    -- or whose last status update was before the period started
+    and first_status_time < ed and latest_status_time > sd;
 
--- ------------------------
---  Select matching events
--- ------------------------
+-- select * from temp_selections;
+
+-- ----------------------------
+--  Select matching event data
+-- ----------------------------
 
 drop temporary table if exists temp_events;
 
 set @sql = concat( 'create temporary table temp_events ' );
-set @sql = concat( @sql, 'select selection, concat( ev_state, '' - '', hard_soft ) as series, e.* ' );
+set @sql = concat( @sql, 'select i_id, start_time, end_time, first_status_time, latest_status_time, ' );
+set @sql = concat( @sql, '  selection, concat( ev_state, '' - '', hard_soft ) as series ' );
 set @sql = concat( @sql, ' from ', event_table, ' e join temp_selections s on e.cdb_instance_id = s.i_id ' );
-set @sql = concat( @sql, '  where e.start_time < ''', ed, ''' and ( e.end_time > ''', sd, ''' or e.end_time is null )' );
+set @sql = concat( @sql, '  where e.start_time < ''', ed, ''' and ( e.end_time > ''', sd, ''' or e.end_time is null ) ' );
+
+if hard_or_soft = 'HARD' or hard_or_soft = 'SOFT' then
+  set @sql = concat( @sql, '  and hard_soft = ''', hard_or_soft, ''' ' );
+ end if;
 
 prepare evtsel from @sql;
 execute evtsel;
+
+-- select * from temp_events;
 
 -- ------------------------
 --  Calculate outage slots
@@ -116,21 +144,59 @@ execute evtsel;
 
 drop temporary table if exists temp_outage_slots;
 
+-- Calculate outages due to events
 create temporary table temp_outage_slots
-select slot_start, slot_duration, series, selection,
+select slot_start, slot_duration, selection, series,
  count(*) as event_count,
  sum(
    TIMESTAMPDIFF(
      SECOND,
-     CASE when start_time < slot_start then slot_start else start_time END,
-     CASE when end_time is null then slot_end when end_time > slot_end then slot_end else end_time END
+     CASE
+       when start_time <= slot_start then slot_start
+       else start_time END,
+     CASE
+       when end_time is null then least(slot_end,latest_status_time)
+       when end_time >= slot_end then slot_end
+       else end_time END
      )
    ) event_duration
  from temp_events e join temp_slots s
-  on e.start_time < slot_end and ( end_time > slot_start or end_time is null )
- group by slot_start, slot_end, series, selection
- order by slot_start, slot_end, series;
+  on start_time < slot_end and (
+       end_time > slot_start or  ( end_time is null and latest_status_time > slot_start )
+       )
+ group by slot_start, slot_duration, selection, series;
 
+-- Calculate outage attributable to absence of monitoring data
+insert into temp_outage_slots
+select slot_start, slot_duration, selection, 'NO DATA' as series,
+   1 as event_count,
+   TIMESTAMPDIFF(
+     SECOND,
+     slot_start,
+     CASE
+       when first_status_time >= slot_end then slot_end
+       when first_status_time <= slot_start then slot_start
+       else first_status_time END
+     ) +
+   TIMESTAMPDIFF(
+     SECOND,
+     CASE
+       when latest_status_time <= slot_start then slot_start
+       when latest_status_time >= slot_end then slot_end
+       else latest_status_time END,
+     slot_end
+     ) as event_duration
+--
+ from temp_slots slot join temp_selections sel
+  on first_status_time > slot_start or latest_status_time < slot_end;
+
+/*
+select * from temp_outage_slots
+ order by selection, slot_start, series;
+
+select slot_start, selection, sum(event_duration) as down_time
+     from temp_outage_slots group by slot_start, selection;
+*/
 -- ------------------------
 --  Calculate uptime slots
 -- ------------------------
@@ -140,7 +206,6 @@ drop temporary table if exists temp_uptime_slots;
 create temporary table temp_uptime_slots
 select e.selection,
    case
-     when s.slot_end < i.first_status_time or s.slot_start > i.latest_status_time then 'NO DATA'
      when instr(e.selection,':') then 'OK'
      else 'UP'
     end as series,
@@ -148,7 +213,6 @@ select e.selection,
    1 as event_count, s.slot_duration, s.slot_duration - ifnull(o.down_time,0) as event_duration
   from temp_slots s
    cross join temp_selections e
-   left join cdb_instances i on e.i_id = i.id
    left join (
     select slot_start, selection, sum(event_duration) as down_time
      from temp_outage_slots group by slot_start, selection
@@ -163,7 +227,7 @@ select selection, category, series, slot_duration, event_count, event_duration, 
   select selection, slot_start as category, series,
     slot_duration, event_count, event_duration, round(100 * event_duration / slot_duration,2) as 'event_percent'
    from temp_outage_slots
- order by selection, category, series;
+ order by selection, series, category;
 
 END; -- end of 'main' block
 
