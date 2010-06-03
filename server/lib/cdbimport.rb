@@ -162,9 +162,9 @@ class CdbDataFile
 	attr_reader :datafull, :metafull, :datafile, :metafile
 
 	def initialize(d,f)
-		if f =~ /^(\w+)\.(\w+)\.(\w+)\.(\d+\.\d+)\.data$/
+		if f =~ /^(\w+)\.(\w[\w\-\_]+)\.(\w+)\.(\d+\.\d+)\.data$/
 			@prefix, @srcsrv, @srcapp, @dattim = $1, $2, $3, $4
-		 elsif f =~ /^(\w+)\.(\w+)\.(\d+\.\d+)\.data$/
+		 elsif f =~ /^(\w+)\.(\w[\w\-\_]+)\.(\d+\.\d+)\.data$/
 			@prefix, @srcsrv, @srcapp, @dattim = $1, $2, '', $3
 		 else
 			raise "Unrecognised filename"
@@ -194,7 +194,7 @@ class CdbDataFile
 
 	# Detect filenames that seem valid
 	def self.valid_name?(f)
-		f =~ /^(\w+)\.(\w+)\.(\w+)\.(\d+\.\d+)\.data$/ or f =~ /^(\w+)\.(\w+)\.(\d+\.\d+)\.data$/
+		f =~ /^(\w+)\.(\w[\w\-\_]+)\.(\w+)\.(\d+\.\d+)\.data$/ or f =~ /^(\w+)\.(\w[\w\-\_]+)\.(\d+\.\d+)\.data$/
 	end
 
 	# Move the pair of files to a new directory
