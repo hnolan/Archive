@@ -190,7 +190,7 @@ class NagCfg_Variable
 		# Validate input text
 		# Handle global keyword=value (no whitespace allowed before keyword)
 		if txt =~ /([\$\w_\[\]]+)\s*=\s*(.*)$/	
-			@name = $1; @value = $2
+			@name = $1; @value = $2.strip
 			raise "Unrecognised NagCfg_Variable Declaration [#{@name}]" unless NAG_MAINVARS.include?(@name)
 		 else
 			raise "Malformed NagCfg_Variable [#{txt}]"

@@ -266,6 +266,7 @@ NAG_OBJVARS = {
 	%w( 
 		host_name
 		hostgroup_name
+		hostgroup
 		service_description
 		display_name
 		servicegroups

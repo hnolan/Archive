@@ -137,13 +137,15 @@ class NagiosConfig
 			}
 	end
 
-	def dump_obj
-		puts "ObjectType,ObjectID,AttributeName,AttributeValue,SourceObj,SourceFile"
-		each_obj { |o|
+	def dump_obj(objtypes=nil)
+#		puts "ObjectType,ObjectID,AttributeName,AttributeValue,SourceObj,SourceFile,SourceLine"
+		puts "ObjectType\tObjectID\tAttributeName\tAttributeValue\tSourceObj\tSourceFile\tSourceLine"
+		each_obj(objtypes) { |o|
 			ot = o.objtype
 			oid = o.objid
 			o.each_attribute { |a|
-				puts "#{ot},#{oid},#{a.name},\"#{a.value}\",#{a.objname},#{a.cfgfile}\n"
+#				puts "#{ot},#{oid},#{a.name},\"#{a.value}\",#{a.objname},#{a.cfgfile},#{a.cfgline}\n"
+				puts "#{ot}\t#{oid}\t#{a.name}\t\"#{a.value}\"\t#{a.objname}\t#{a.cfgfile}\t#{a.cfgline}\n"
 				}
 			}
 	end
