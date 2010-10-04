@@ -34,7 +34,7 @@ class NagiosConfig
 		@cfg_files.each { |f| 
 			cf = NagCfg_File.new(f,get_local_name(f))
 			cf.list_errors if cf.has_errors?
-
+cf.dumpcfg(1)
 			cf.each_obj { |o|
 				@cfg_objects[o.objtype] = [] unless @cfg_objects.key?(o.objtype)
 				@cfg_objects[o.objtype] << o

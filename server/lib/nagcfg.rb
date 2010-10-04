@@ -48,22 +48,24 @@
 #
 require "nagcfginfo.rb"
 
-class NagCfg_File
+#=====================================================================
+#		Nagios Main Config File
+#=====================================================================
+#
 
-	attr_reader :filename, :var_count, :obj_count
+class NagiosConfigMainFile
+
+	attr_reader :filename, :var_count
 
 	def initialize(fname,locname=nil)
 
 		@filename = fname
 		@vars = Array.new
-		@objs = Array.new
 		@errors = Array.new
 
 		@f = File.open(locname ? locname : fname)
 
-		linenum = 0; line = ""; 
-		objtype = nil; objlinenum = 0
-		objattr = Array.new;
+		linenum = 0; linebuf = ""; 
 
 		@f.each { |fileline|
 			linenum += 1
@@ -75,52 +77,153 @@ class NagCfg_File
 
 			# Handle continuation lines
 			if fileline =~ /(.*)\\$/
-				line += $1 ; next
+				linebuf += $1 ; next
 			 else
-				line += fileline
+				linebuf += fileline
 			 end
 
-			if objtype == nil	# We are not in an object definition
+			if linebuf =~ /^[\$\w_\[\]]+=/		# Variable definition
+				begin
+					@vars << NagiosConfigFileVariable.new(linebuf, fname, linenum)
+				 rescue 
+					@errors << "Bad variable found at line #{linenum}: #{$!}\n[#{linebuf}]"
+				 end
+			 else
+				@errors << "Unrecognised entry at line #{linenum}: [#{linebuf}]"
+			 end
+
+			# Clear line buffer
+			linebuf = ""
+
+			}		
+
+		@f.close
+
+		@var_count = @vars.size
+
+		puts "Found #{@errors.size} errors in nagios config file #{fname}" if has_errors?
+
+	end
+
+	def each
+		@vars.each { |i| yield i }
+	end
+
+	def has_errors?
+		@errors.size > 0
+	end
+
+	def list_errors
+		@errors.each { |err| puts err }
+	end
+
+	def dumpcfg(dump_all=0)
+		puts "\nNagios Main Config File : #{@filename}"
+		if @var_count > 0 
+			puts "\tFound #{@var_count} variables"
+			@vars.each { |v| puts "\t\t#{v}" } if dump_all != 0
+		 end
+	end
+
+end
+
+# ------------------------------------------------
+
+class NagiosConfigFileVariable
+
+	attr_reader :name, :value, :cfgfile, :cfgline
+
+	def initialize(txt,fname,linenum)
+
+		@cfgfile = fname
+		@cfgline = linenum
+
+		# Validate input text
+		# Handle global keyword=value (no whitespace allowed before keyword)
+		if txt =~ /([\$\w_\[\]]+)\s*=\s*(.*)$/	
+			@name = $1; @value = $2.strip
+			raise "Unrecognised Variable Declaration [#{@name}]" unless NAG_MAINVARS.include?(@name)
+		 else
+			raise "Malformed Variable Declaration [#{txt}]"
+		 end
+		 
+	end
+
+	def to_s
+		s = "#{@name}=#{@value}"
+	end
+
+end
+
+#=====================================================================
+#		Nagios Object Config File
+#=====================================================================
+#
+
+class NagiosConfigObjectFile
+
+	attr_reader :filename, :obj_count
+
+	def initialize(fname,locname=nil)
+
+		@filename = fname
+		@objs = Array.new
+		@errors = Array.new
+
+		@f = File.open(locname ? locname : fname)
+
+		linenum = 0; linebuf = ""; 
+		objtype = nil; objlinenum = 0
+		objattr = Array.new;
+		curr_obj = nil
+
+		@f.each { |fileline|
+			linenum += 1
 			
-				if line =~ /^\s*define\s+(\w+)\s*\{\s*$/	# Object definition
+			# Discard comment lines and blank lines
+			next if fileline =~ /^\s*#/
+			next if fileline =~ /^\s*\;/
+			next if fileline =~ /^\s*$/
+
+			# Handle continuation lines
+			if fileline =~ /(.*)\\$/
+				linebuf += $1 ; next
+			 else
+				linebuf += fileline
+			 end
+
+			if curr_obj == nil	# We are not in an object definition
+			
+				if linebuf =~ /^\s*define\s+(\w+)\s*\{\s*$/	# Object definition
 
 					objtype = $1
-					objline = line
-					objlinenum = linenum
 
-				 elsif line =~ /^[\$\w_\[\]]+=/		# Variable definition
-
+					# Start of object definition - create the new object
 					begin
-						@vars << NagCfg_Variable.new(line, fname, linenum)
+						curr_obj = NagiosConfigFileObject.new(objtype, fname, linenum)
 					 rescue 
-						@errors << "Bad variable found at line #{linenum}: #{$!}\n[#{line}]"
+						@errors << "Illegal Object found at line #{linenum}: #{$!}\n[#{linebuf}]"
 					 end
 
 				 else
-					@errors << "Unrecognised entry at line #{linenum}: [#{line}]"
+					@errors << "Unrecognised entry at line #{linenum}: [#{linebuf}]"
 				 end
 
 			 else			 				# We are in an object definition
 
-				if line =~ /^\s*\}\s*$/
+				if linebuf =~ /\}\s*$/
 
-					# End of object definition - create the new object
-					begin
-						@objs <<  NagCfg_Object.new(objtype, objattr, fname, objlinenum)
-					 rescue 
-						@errors << "Bad object found at line #{objlinenum}: #{$!}\n[#{objline}]"
-					 end
-
-					objtype = nil
-					objattr.clear
+					# End of object definition - store the object
+					@objs << curr_obj
+					curr_obj = nil
 
 				 else
 
 					# Treat any lines within an object as an attribute
 					begin
-					 	objattr << NagCfg_Attribute.new(line, fname, linenum)
+					 	curr_obj.new_attribute(linebuf, linenum)
 					 rescue 
-						@errors << "Bad object attribute found at line #{linenum}: #{$!}\n[#{line}]"
+						@errors << "Bad object attribute found at line #{linenum}: #{$!}\n[#{linebuf}]"
 					 end
 
 			 	 end
@@ -128,13 +231,12 @@ class NagCfg_File
 			 end
 
 			# Clear line buffer
-			line = ""
+			linebuf = ""
 
 			}		
 
 		@f.close
 
-		@var_count = @vars.size
 		@obj_count = @objs.size
 
 		puts "Found #{@errors.size} errors in nagios config file #{fname}" if has_errors?
@@ -163,11 +265,7 @@ class NagCfg_File
 	end
 
 	def dumpcfg(dump_all=0)
-		puts "\nConfig file : #{@filename}"
-		if @var_count > 0 
-			puts "\tFound #{@var_count} variables"
-			@vars.each { |v| puts "\t\t#{v}" } if dump_all != 0
-		 end
+		puts "\nObject Config file : #{@filename}"
 		if @obj_count > 0 
 			puts "\tFound #{@obj_count} objects"
 			@objs.each { |o| puts "\t\t#{o}" } if dump_all != 0
@@ -178,120 +276,24 @@ end
 
 # ------------------------------------------------
 
-class NagCfg_Variable
-
-	attr_reader :name, :value, :cfgfile, :cfgline
-
-	def initialize(txt,fname,linenum)
-
-		@cfgfile = fname
-		@cfgline = linenum
-
-		# Validate input text
-		# Handle global keyword=value (no whitespace allowed before keyword)
-		if txt =~ /([\$\w_\[\]]+)\s*=\s*(.*)$/	
-			@name = $1; @value = $2.strip
-			raise "Unrecognised NagCfg_Variable Declaration [#{@name}]" unless NAG_MAINVARS.include?(@name)
-		 else
-			raise "Malformed NagCfg_Variable [#{txt}]"
-		 end
-		 
-	end
-
-	def to_s
-		s = "#{@name}=#{@value}"
-	end
-
-end
-
-# ------------------------------------------------
-
-class NagCfg_Object
+class NagiosConfigFileObject
 
 	attr_reader :objtype, :cfgfile, :cfgline, :objid, :name
 
-	def initialize(objtype,objattr,fname,linenum)
+	def initialize(objtype,fname,linenum)
 
 		# Validate object type
-		raise "Unrecognised NagCfg_Object type [#{objtype}]" unless NAG_OBJVARS.key?(objtype)
+		raise "Unrecognised Object type [#{objtype}]" unless NAG_OBJVARS.key?(objtype)
 
 		# Initialise variables
-		@valid_attr = NAG_OBJVARS[objtype]
-		@max_attr_len = 0
 		@objtype = objtype
 		@cfgfile = fname
 		@cfgline = linenum
+
+		@max_attr_len = 0
+		@valid_attr = NAG_OBJVARS[@objtype]
 		@attributes = Hash.new
 
-		# Add collected attributes
-		objattr.each { |a| add_attribute(a) }
-
-		# Infer the identifier for this object
-		if has_attribute?("#{@objtype}_name")
-			@objid = get_attribute("#{@objtype}_name").value
-		 elsif has_attribute?("#{@objtype}_description")
-			@objid = get_attribute("#{@objtype}_description").value
-		 else
-			@objid = "NONAME"
-		 end
-
-		if has_name?
-			@name = get_attribute("name").value 
-			each_attribute { |a| a.objname = @name }
-		 end
-			
-		@inheriting = false
-		@inherited = has_use? ? false : true
-
-	end
-
-	def has_name?
-		has_attribute?("name")
-	end
-
-	def has_use?
-		has_attribute?("use")
-	end
-
-	def register?
-		# Register the object unless register attribute is explicitly set to 0
-		!( has_attribute?("register") and get_attribute("register").value == 0 )
-	end
-
-	def inherit( named_objects )
-
-		raise "
-		Inheritance loop found
-		#{@objtype} object #{@objid} inherits (possibly indirectly) from itself
-		" if @inheriting
-
-		# Return this object if inheritance has already been calculated for it
-		return self if @inherited
-
-		@inheriting = true		# Set marker that inheritance is in progress for this object	
-
-		# Get ancestor list
-		ancestor_names = get_attribute("use").value.split(/\s*,\s*/)
-
-		# Get inheritance from each ancestor
-		ancestor_names.each { |ancname| 
-			raise "Ancestor not found" unless named_objects.key?(ancname)
-
-			# Get inheritance from ancestor
-			ancestor_object = named_objects[ancname].inherit( named_objects )
-			
-			# Apply inheritance to this object
-			ancestor_object.each_attribute { |ancattr|
-				# Do not process inhertiance control attributes
-				next if ancattr.name == "name" or ancattr.name == "use" or ancattr.name == "register"	
-				add_attribute(ancattr,"inherited")		# Add inherited attribute
-				}
-			}
-
-		@inheriting = false	# Clear marker that inheritance is in progress for this object
-		@inherited = true		# Set marker that inheritance is complete for this object
-		return self
-		
 	end
 
 	# --- Attribute methods
@@ -303,44 +305,41 @@ class NagCfg_Object
 
 	# Return named attribute	
 	def get_attribute(attrname)
-		@attributes[attrname][0]
+		@attributes[attrname]
 	end
 	
-	# Add new attribute to this object
-	def add_attribute(attrib,scope="local")
+	# Create new attribute and add to this object
+	def new_attribute(linebuf, linenum)
 
-		# Prevent existing attributes from being overwritten
-		return if has_attribute?(attrib.name)
-
+		# Create new text attribute
+		a = NagiosConfigFileAttribute.new(self, linebuf, linenum)
+		
 		# Validate attribute for this Object type
-		raise "Invalid Object Attribute #{attrib}" unless 
-			attrib.custom or 										# Don't validate custom attributes
-			@valid_attr.include?(attrib.name) 	# Validate attribute name
-# @objtype == "timeperiod" or 
+		raise "Invalid Object Attribute #{new_attr}" unless 
+			a.custom or 									# Don't validate custom attributes
+			@valid_attr.include?(a.name) 	# Validate attribute name
 
 		# Add attribute with its scope specifier
-		@attributes[attrib.name] = [ attrib, scope ]
+		@attributes[a.name] = a
 
 		# Adjust length for use by pretty printing
-		@max_attr_len = attrib.name.length if attrib.name.length > @max_attr_len
+		@max_attr_len = a.name.length if a.name.length > @max_attr_len
 
 	end
 
 	# Iterate over attribute array
-	def each_attribute(scope="")
+	def each_attribute
 		# Return attribute in order of valid list
 		@valid_attr.each { |va|
 			next unless has_attribute?(va)
-			yield @attributes[va][0] if scope == "" or @attributes[va][1] == scope
+			yield @attributes[va]
 			}
 		# Return custom attributes
-		@attributes.each { |a|
-			next unless a[1][0].custom
-			yield a[1][0] if scope == "" or a[1][1] == scope
+		@attributes.each { |n,a|
+			next unless a.custom
+			yield a
 			}
 	end
-
-	# --- End attribute methods
 
 	def dump_obj
 		s = "#{@objtype}	: #{@objid}\n"
@@ -366,18 +365,16 @@ end
 
 # ------------------------------------------------
 
-class NagCfg_Attribute
+class NagiosConfigFileAttribute
 
 	attr_reader :name, :value, :cfgfile, :cfgline, :custom
 	attr_accessor :objname
 
-	def initialize(txt,fname,linenum)
+	def initialize(txtobj,txt,linenum)
 
+		@txtobj = txtobj
 		@txt = txt
-		@cfgfile = fname
 		@cfgline = linenum
-
-		@objname = nil
 
 		# Extract keyword/value pairs from raw text lines
 		if txt =~ /^\s*([\w_]+)\s+(\d+)\s+\;.*$/		# Numeric value with comment
@@ -391,12 +388,17 @@ class NagCfg_Attribute
 		 elsif txt =~ /^\s*(\w[\w_]+)$/							# Line without value
 			@name = $1; @value = nil
 		 else
-			raise "Unrecognised NagCfg_Attribute [#{@txt}]"
+			raise "Unrecognised Attribute [#{@txt}]"
 		 end
 
 		# Custom attributes begin with an underscore
 		@custom = ( @name =~ /^\_/ )
 
+	end
+
+	# Return text object's filename
+	def cfgfile
+		@cfgobj.cfgfile
 	end
 
 	def to_s_d(x)
@@ -410,3 +412,220 @@ class NagCfg_Attribute
 end
 
 # ------------------------------------------------
+
+## ------------------------------------------------
+#
+#class NagCfg_Object
+#
+#	attr_reader :objtype, :cfgfile, :cfgline, :objid, :name
+#
+#	def initialize(objtype,objattr,fname,linenum)
+#
+#		# Validate object type
+#		raise "Unrecognised NagCfg_Object type [#{objtype}]" unless NAG_OBJVARS.key?(objtype)
+#
+#		# Initialise variables
+#		@valid_attr = NAG_OBJVARS[objtype]
+#		@max_attr_len = 0
+#		@objtype = objtype
+#		@cfgfile = fname
+#		@cfgline = linenum
+#		@attributes = Hash.new
+#
+#		# Add collected attributes
+#		objattr.each { |a| add_attribute(a) }
+#
+#		# Infer the identifier for this object
+#		if has_attribute?("#{@objtype}_name")
+#			@objid = get_attribute("#{@objtype}_name").value
+#		 elsif has_attribute?("#{@objtype}_description")
+#			@objid = get_attribute("#{@objtype}_description").value
+#		 else
+#			@objid = "NONAME"
+#		 end
+#
+#		if has_name?
+#			@name = get_attribute("name").value 
+#			each_attribute { |a| a.objname = @name }
+#		 end
+#			
+#		@inheriting = false
+#		@inherited = has_use? ? false : true
+#
+#	end
+#
+#	def has_name?
+#		has_attribute?("name")
+#	end
+#
+#	def has_use?
+#		has_attribute?("use")
+#	end
+#
+#	def register?
+#		# Register the object unless register attribute is explicitly set to 0
+#		!( has_attribute?("register") and get_attribute("register").value == 0 )
+#	end
+#
+#	def inherit( named_objects )
+#
+#		raise "
+#		Inheritance loop found
+#		#{@objtype} object #{@objid} inherits (possibly indirectly) from itself
+#		" if @inheriting
+#
+#		# Return this object if inheritance has already been calculated for it
+#		return self if @inherited
+#
+#		@inheriting = true		# Set marker that inheritance is in progress for this object	
+#
+#		# Get ancestor list
+#		ancestor_names = get_attribute("use").value.split(/\s*,\s*/)
+#
+#		# Get inheritance from each ancestor
+#		ancestor_names.each { |ancname| 
+#			raise "Ancestor not found" unless named_objects.key?(ancname)
+#
+#			# Get inheritance from ancestor
+#			ancestor_object = named_objects[ancname].inherit( named_objects )
+#			
+#			# Apply inheritance to this object
+#			ancestor_object.each_attribute { |ancattr|
+#				# Do not process inhertiance control attributes
+#				next if ancattr.name == "name" or ancattr.name == "use" or ancattr.name == "register"	
+#				add_attribute(ancattr,"inherited")		# Add inherited attribute
+#				}
+#			}
+#
+#		@inheriting = false	# Clear marker that inheritance is in progress for this object
+#		@inherited = true		# Set marker that inheritance is complete for this object
+#		return self
+#		
+#	end
+#
+#	# --- Attribute methods
+#
+#	# Check for presence of a named attribute
+#	def has_attribute?(attrname)
+#		@attributes.key?(attrname)
+#	end
+#
+#	# Return named attribute	
+#	def get_attribute(attrname)
+#		@attributes[attrname][0]
+#	end
+#	
+#	# Add new attribute to this object
+#	def add_attribute(attrib,scope="local")
+#
+#		# Prevent existing attributes from being overwritten
+#		return if has_attribute?(attrib.name)
+#
+#		# Validate attribute for this Object type
+#		raise "Invalid Object Attribute #{attrib}" unless 
+#			attrib.custom or 										# Don't validate custom attributes
+#			@valid_attr.include?(attrib.name) 	# Validate attribute name
+## @objtype == "timeperiod" or 
+#
+#		# Add attribute with its scope specifier
+#		@attributes[attrib.name] = [ attrib, scope ]
+#
+#		# Adjust length for use by pretty printing
+#		@max_attr_len = attrib.name.length if attrib.name.length > @max_attr_len
+#
+#	end
+#
+#	# Iterate over attribute array
+#	def each_attribute(scope="")
+#		# Return attribute in order of valid list
+#		@valid_attr.each { |va|
+#			next unless has_attribute?(va)
+#			yield @attributes[va][0] if scope == "" or @attributes[va][1] == scope
+#			}
+#		# Return custom attributes
+#		@attributes.each { |a|
+#			next unless a[1][0].custom
+#			yield a[1][0] if scope == "" or a[1][1] == scope
+#			}
+#	end
+#
+#	# --- End attribute methods
+#
+#	def dump_obj
+#		s = "#{@objtype}	: #{@objid}\n"
+#		@attributes.each_key { |k| s += "\t[#{k}] : [#{@attributes[k].value}]\n" }
+#		s += "\n"
+#	end
+#
+#	def to_s_d
+#		s = "#{@objtype}	: #{@objid}"
+#	end
+#
+#	def to_s
+#		s = "\ndefine #{@objtype}	{ \n"
+#		each_attribute { |a|
+#			s += "\t#{a.to_s(@max_attr_len)}"
+#			s += "\t\t; inherited from #{a.objname}" if a.objname != @name
+#			s += "\n" 
+#			}
+#		s += "\t}\n"
+#	end
+#
+#end
+#
+## ------------------------------------------------
+#
+#class NagCfg_Attribute
+#
+#	attr_reader :name, :value, :cfgfile, :cfgline, :custom
+#	attr_accessor :objname
+#
+#	def initialize(txt,linenum)
+#
+#		@txt = txt
+#		@cfgobj = fname
+#		@cfgline = linenum
+#
+#		@objname = nil
+#
+#		# Extract keyword/value pairs from raw text lines
+#		if txt =~ /^\s*([\w_]+)\s+(\d+)\s+\;.*$/		# Numeric value with comment
+#			@name = $1; @value = $2.to_i
+#		 elsif txt =~ /^\s*([\w_]+)\s+(\d+)\s*$/		# Numeric value without comment
+#			@name = $1; @value = $2.to_i
+#		 elsif txt =~ /^\s*([\w_]+)\s+(.*)\s+\;.*$/	# Line with comment
+#			@name = $1; @value = $2.strip
+#		 elsif txt =~ /^\s*([\w_]+)\s+(.*)$/				# Line without comment
+#			@name = $1; @value = $2.strip
+#		 elsif txt =~ /^\s*(\w[\w_]+)$/							# Line without value
+#			@name = $1; @value = nil
+#		 else
+#			raise "Unrecognised NagCfg_Attribute [#{@txt}]"
+#		 end
+#
+#		# Custom attributes begin with an underscore
+#		@custom = ( @name =~ /^\_/ )
+#
+#	end
+#
+#	# Set parent object
+#	def set_obj(o)
+#		@cfgobj = o
+#	end
+#
+#	# Return object's filename
+#	def cfgfile
+#		@cfgobj.cfgfile
+#	end
+#
+#	def to_s_d(x)
+#		s = "[#{@name}] : [#{@value}]"
+#	end
+#
+#	def to_s(lj=0)
+#		s = "#{@name.ljust(lj)}\t#{@value}"
+#	end
+#
+#end
+#
+## ------------------------------------------------
