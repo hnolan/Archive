@@ -244,15 +244,6 @@ class NagiosConfigObjectFile
 	end
 
 	def each
-		@vars.each { |i| yield i }
-		@objs.each { |i| yield i }
-	end
-
-	def each_var
-		@vars.each { |i| yield i }
-	end
-
-	def each_obj
 		@objs.each { |i| yield i }
 	end
 
@@ -272,13 +263,51 @@ class NagiosConfigObjectFile
 		 end
 	end
 
+	def report_inheritance
+
+		puts "\n\n#=============================\n"
+		puts "# Abstract Template Objects\n"
+		puts "#=============================\n\n"
+		@objs.each { |o|
+			next unless o.is_template? and o.is_abstract?
+			puts "#{o.objtype} : name = #{o.name}"
+			}
+		
+		puts "\n\n#=============================\n"
+		puts "# Normal Template Objects\n"
+		puts "#=============================\n\n"
+		@objs.each { |o|
+			next unless o.is_template? and not o.is_abstract?
+			puts "#{o.objtype} : name = #{o.name} : #{o.objid}"
+			}
+		
+		puts "\n\n#=============================\n"
+		puts "# Inheritor Objects\n"
+		puts "#=============================\n\n"
+		@objs.each { |o|
+			next unless o.is_inheritor? and not o.is_template?
+			puts "#{o.objtype} : #{o.objid}"
+			puts "\t#{o.attributes['use']}"
+			}
+		
+		puts "\n\n#=============================\n"
+		puts "# Non Inheritor Objects\n"
+		puts "#=============================\n\n"
+		@objs.each { |o|
+			next if o.is_inheritor? or o.is_template?
+			puts "#{o.objtype} : #{o.objid}"
+			}
+
+	end
+
 end
 
 # ------------------------------------------------
 
 class NagiosConfigFileObject
 
-	attr_reader :objtype, :cfgfile, :cfgline, :objid, :name
+	attr_reader :objtype, :cfgfile, :cfgline
+	attr_reader :attributes, :objid, :name
 
 	def initialize(objtype,fname,linenum)
 
@@ -294,6 +323,27 @@ class NagiosConfigFileObject
 		@valid_attr = NAG_OBJVARS[@objtype]
 		@attributes = Hash.new
 
+		@objid = "NOID"
+		@name = "NONAME"
+
+		# Properties
+		@prop_register = true
+		@prop_name = false
+		@prop_use = false
+
+	end
+
+	# Object properties
+	def is_abstract?
+		not @prop_register
+	end
+
+	def is_template?
+		@prop_name
+	end
+
+	def is_inheritor?
+		@prop_use
 	end
 
 	# --- Attribute methods
@@ -319,11 +369,22 @@ class NagiosConfigFileObject
 			a.custom or 									# Don't validate custom attributes
 			@valid_attr.include?(a.name) 	# Validate attribute name
 
-		# Add attribute with its scope specifier
+		# Add attribute
 		@attributes[a.name] = a
 
 		# Adjust length for use by pretty printing
 		@max_attr_len = a.name.length if a.name.length > @max_attr_len
+
+		# Infer the identifier for this object from certain attributes
+		@objid = a.value if a.name == "#{@objtype}_name" or a.name == "#{@objtype}_description"
+
+		# Set object properties
+		if a.name == "name"
+			@name = a.value
+			@prop_name = true
+		 end 
+		@prop_use  = true if a.name == "use"
+		@prop_register = false if a.name == "register" and a.value == 0
 
 	end
 
@@ -355,7 +416,6 @@ class NagiosConfigFileObject
 		s = "\ndefine #{@objtype}	{ \n"
 		each_attribute { |a|
 			s += "\t#{a.to_s(@max_attr_len)}"
-			s += "\t\t; inherited from #{a.objname}" if a.objname != @name
 			s += "\n" 
 			}
 		s += "\t}\n"
@@ -367,33 +427,42 @@ end
 
 class NagiosConfigFileAttribute
 
-	attr_reader :name, :value, :cfgfile, :cfgline, :custom
-	attr_accessor :objname
+	attr_reader :name, :value, :values, :cfgobj, :cfgline, :custom
 
-	def initialize(txtobj,txt,linenum)
+	def initialize(cfgobj,linebuf,linenum)
 
-		@txtobj = txtobj
-		@txt = txt
+		@cfgobj  = cfgobj
 		@cfgline = linenum
+	 	@multiref = false
 
 		# Extract keyword/value pairs from raw text lines
-		if txt =~ /^\s*([\w_]+)\s+(\d+)\s+\;.*$/		# Numeric value with comment
+		if linebuf =~ /^\s*([\w_]+)\s+(\d+)\s+\;.*$/		# Numeric value with comment
 			@name = $1; @value = $2.to_i
-		 elsif txt =~ /^\s*([\w_]+)\s+(\d+)\s*$/		# Numeric value without comment
+		 elsif linebuf =~ /^\s*([\w_]+)\s+(\d+)\s*$/		# Numeric value without comment
 			@name = $1; @value = $2.to_i
-		 elsif txt =~ /^\s*([\w_]+)\s+(.*)\s+\;.*$/	# Line with comment
+		 elsif linebuf =~ /^\s*([\w_]+)\s+(.*)\s+\;.*$/	# Line with comment
 			@name = $1; @value = $2.strip
-		 elsif txt =~ /^\s*([\w_]+)\s+(.*)$/				# Line without comment
+		 elsif linebuf =~ /^\s*([\w_]+)\s+(.*)$/				# Line without comment
 			@name = $1; @value = $2.strip
-		 elsif txt =~ /^\s*(\w[\w_]+)$/							# Line without value
+		 elsif linebuf =~ /^\s*(\w[\w_]+)$/							# Line without value
 			@name = $1; @value = nil
 		 else
-			raise "Unrecognised Attribute [#{@txt}]"
+			raise "Unrecognised Attribute [#{linebuf}]"
 		 end
 
 		# Custom attributes begin with an underscore
 		@custom = ( @name =~ /^\_/ )
 
+		# Attribute properties
+		if NAG_ATTR_MULTI.key?(@cfgobj.objtype) and NAG_ATTR_MULTI[@cfgobj.objtype].include?(@name)
+			@multiref = true
+			@values = @value.split(/\s*,\s*/)
+		end
+
+	end
+
+	def is_multi?
+		@multiref
 	end
 
 	# Return text object's filename
@@ -407,6 +476,11 @@ class NagiosConfigFileAttribute
 
 	def to_s(lj=0)
 		s = "#{@name.ljust(lj)}\t#{@value}"
+		if is_multi?
+			s += "\t; Multi-value"
+			@values.each { |v| s += "\n\t\t#{v}" } 
+		end
+		s
 	end
 
 end

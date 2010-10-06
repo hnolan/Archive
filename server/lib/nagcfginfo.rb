@@ -376,4 +376,75 @@ NAG_OBJVARS = {
 	
 }	# End of OBJVARS hash (Nagios Object Variables)
 	
+
+# Nagios attributes that can contain multiple references	
+NAG_ATTR_MULTI = {
+
+ "contact" => 
+	%w(
+		contactgroups 
+		host_notification_commands 
+		service_notification_commands 
+		use
+		),
+
+ "contactgroup" =>
+	%w( 
+		contactgroup_members
+		members
+		use
+		), 
+
+ "host" =>
+	%w( 
+		contact_groups
+		contacts
+		hostgroups
+		parents
+		use
+		), 
+
+ "hostescalation" =>
+	%w( 
+		contact_groups
+		contacts
+		use
+		), 
+
+ "hostgroup" =>
+	%w( 
+		hostgroup_members
+		members
+		use
+		), 
+
+ "service" =>
+	%w( 
+		contact_groups
+		contacts
+		servicegroups
+		use
+		), 
+
+ "serviceescalation" =>
+	%w( 
+		contacts
+		use
+		), 
+
+ "servicegroup" =>
+	%w( 
+		members
+		servicegroup_members
+		use
+		), 
+
+ "timeperiod" =>
+	%w( 
+		exclude 
+		use
+		)
+
+}	# End of NAG_ATTR_MULTI hash
 	
+
