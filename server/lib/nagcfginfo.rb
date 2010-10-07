@@ -404,10 +404,27 @@ NAG_ATTR_MULTI = {
 		use
 		), 
 
+ "hostdependency" =>
+	%w( 
+		dependent_host_name
+		dependent_hostgroup_name
+		host_name
+		hostgroup_name
+		use
+		), 
+
  "hostescalation" =>
 	%w( 
 		contact_groups
 		contacts
+		host_name
+		hostgroup_name
+		use
+		), 
+
+ "hostextinfo" =>
+	%w( 
+		host_name
 		use
 		), 
 
@@ -422,13 +439,33 @@ NAG_ATTR_MULTI = {
 	%w( 
 		contact_groups
 		contacts
+		host_name
+		hostgroup_name
 		servicegroups
+		use
+		), 
+
+ "servicedependency" =>
+	%w( 
+		dependent_host_name
+		dependent_hostgroup_name
+		host_name
+		hostgroup_name
 		use
 		), 
 
  "serviceescalation" =>
 	%w( 
+		contact_groups
 		contacts
+		host_name
+		hostgroup_name
+		use
+		), 
+
+ "serviceextinfo" =>
+	%w( 
+		host_name
 		use
 		), 
 

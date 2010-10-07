@@ -1,5 +1,46 @@
 require "nagcfg.rb"
 
+		# Fill in defaults
+
+#		# Gather the 1:1 object instances
+#		%w( timeperiod command contact contactgroup host hostextinfo hostgroup servicegroup ).each { |nagobj_type|
+#			next unless @cfg_objects.key?(nagobj_type)
+#			@cfg_objects[nagobj_type].each { |o|
+#				next unless o.register?	# Do not instantiate config object if register is 0
+#				inst = nil
+#				begin
+#					# Create type-specific instance from the object
+#					if nagobj_type == "command" 					then inst = NagiosCommand.new(o)	
+#					 elsif nagobj_type == "contact" 			then inst = NagiosContact.new(o)
+#					 elsif nagobj_type == "contactgroup" 	then inst = NagiosContactGroup.new(o)
+#					 elsif nagobj_type == "host" 					then inst = NagiosHost.new(o)
+#					 elsif nagobj_type == "hostextinfo" 	then inst = NagiosHostExtInfo.new(o)
+#					 elsif nagobj_type == "hostgroup" 		then inst = NagiosHostGroup.new(o)
+#					 elsif nagobj_type == "servicegroup"  then inst = NagiosServiceGroup.new(o)
+#					 elsif nagobj_type == "timeperiod"  	then inst = NagiosTimePeriod.new(o)
+#					 end
+#				 rescue 
+#					@errors << "Object Instantiation: failed for object:\n#{o}\n[#{$!}]\n\n"
+#				 end
+#				@inst_data.add(inst) if inst
+#				}
+#			}
+			
+		# Gather the 1:Many object instances
+#		%w( hostdependency hostescalation service serviceextinfo servicedependency serviceescalation  )
+#					 elsif nagobj_type == "hostdependency"		then inst = NagiosHostDependency.new(o)
+#					 elsif nagobj_type == "hostescalation"		then inst = NagiosHostEscalation.new(o)
+#					 elsif nagobj_type == "service"						then inst = NagiosService.new(o)
+#					 elsif nagobj_type == "servicedependency"	then inst = NagiosServiceDependency.new(o)
+#					 elsif nagobj_type == "serviceescalation"	then inst = NagiosServiceEscalation.new(o)
+#					 elsif nagobj_type == "serviceextinfo"		then inst = NagiosServiceExtInfo.new(o)
+
+		#	Calculate implicit object inheritance
+#	def list_instances(typ=nil)
+#		@inst_data.each(typ) { |inst| puts inst.to_s }
+#	end
+
+
 # ------------------------------------------------
 
 class NagiosInstanceContainer

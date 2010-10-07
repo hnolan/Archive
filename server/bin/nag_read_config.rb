@@ -8,8 +8,8 @@ ps = Hash.new
 ps['/usr/local/nagios/etc']="E:/Dev/testData/NagCW"
 
 
-ncf = NagiosConfig.new(cf,ps)
+nc = NagiosConfig.new(cf,ps)
 
-ncf.report
+nc.report
 
-ncf.dump_obj
+nc.dump_obj
