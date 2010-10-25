@@ -142,6 +142,8 @@ CREATE TABLE `cdb_instances` (
   `latest_status_time` datetime default NULL,
   `created_at` datetime default NULL,
   `updated_at` datetime default NULL,
+  `speed` bigint(20) unsigned default NULL,
+  `description` varchar(250) default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `idx_instance_name_unique` USING BTREE (`cdb_machine_id`,`cdb_object_id`,`instance_name`),
   KEY `FK_instance_object` USING BTREE (`cdb_object_id`),
@@ -219,6 +221,7 @@ DROP TABLE IF EXISTS `dataset_details`;
   `cdb_object` varchar(50),
   `cdb_instance` varchar(250),
   `parent_name` varchar(50),
+  `inst_desc` varchar(250),
   `cdb_counter` varchar(50),
   `counter_type` varchar(45),
   `counter_subtype` varchar(45)
@@ -476,6 +479,24 @@ CREATE TABLE `t1` (
   `min_start` datetime,
   `next_start` datetime
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `tds`
+--
+
+DROP TABLE IF EXISTS `tds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `tds` (
+  `cdc_dataset_id` int(10) unsigned NOT NULL,
+  `cdc_machine` varchar(45) NOT NULL,
+  `cdc_object` varchar(45) NOT NULL,
+  `cdc_instance` varchar(45) NOT NULL,
+  `cdc_counter` varchar(45) NOT NULL,
+  `speed` bigint(20) unsigned NOT NULL,
+  `description` varchar(250) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -2040,7 +2061,7 @@ DELIMITER ;
 /*!50001 DROP VIEW IF EXISTS `dataset_details`*/;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
 /*!50013 DEFINER=`root`@`localhost` SQL SECURITY DEFINER */
-/*!50001 VIEW `dataset_details` AS select `m5`.`id` AS `cdb_dataset_id`,`m0`.`prefix` AS `cdb_prefix`,`m1`.`machine_name` AS `cdb_machine`,`m2`.`object_name` AS `cdb_object`,`m3`.`instance_name` AS `cdb_instance`,`m3`.`parent_name` AS `parent_name`,`m4`.`counter_name` AS `cdb_counter`,`m4`.`counter_type` AS `counter_type`,`m4`.`counter_subtype` AS `counter_subtype` from (((((`cdb_datasets` `m5` join `cdb_counters` `m4` on((`m4`.`id` = `m5`.`cdb_counter_id`))) join `cdb_instances` `m3` on((`m3`.`id` = `m5`.`cdb_instance_id`))) join `cdb_objects` `m2` on((`m2`.`id` = `m3`.`cdb_object_id`))) join `cdb_machines` `m1` on((`m1`.`id` = `m3`.`cdb_machine_id`))) join `cdb_customers` `m0` on((`m0`.`id` = `m1`.`cdb_customer_id`))) */;
+/*!50001 VIEW `dataset_details` AS select `m5`.`id` AS `cdb_dataset_id`,`m0`.`prefix` AS `cdb_prefix`,`m1`.`machine_name` AS `cdb_machine`,`m2`.`object_name` AS `cdb_object`,`m3`.`instance_name` AS `cdb_instance`,`m3`.`parent_name` AS `parent_name`,`m3`.`description` AS `inst_desc`,`m4`.`counter_name` AS `cdb_counter`,`m4`.`counter_type` AS `counter_type`,`m4`.`counter_subtype` AS `counter_subtype` from (((((`cdb_datasets` `m5` join `cdb_counters` `m4` on((`m4`.`id` = `m5`.`cdb_counter_id`))) join `cdb_instances` `m3` on((`m3`.`id` = `m5`.`cdb_instance_id`))) join `cdb_objects` `m2` on((`m2`.`id` = `m3`.`cdb_object_id`))) join `cdb_machines` `m1` on((`m1`.`id` = `m3`.`cdb_machine_id`))) join `cdb_customers` `m0` on((`m0`.`id` = `m1`.`cdb_customer_id`))) */;
 
 --
 -- Final view structure for view `event_instances`
