@@ -4,5 +4,5 @@ grant ALL on rtg.* TO 'cdc'@'localhost';
 grant ALL on cdc_rtg.* TO 'cdc'@'localhost';
 grant FILE on *.* TO 'cdc'@'localhost';
 
-insert into cdc_config values ( 'LAHC', 'lancsman', '/var/cdc/export' );
+insert into cdc_config values ( 'XXXXXX', 'host', '/home/imerja/export/cdc' );
 
